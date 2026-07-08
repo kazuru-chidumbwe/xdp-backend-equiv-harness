@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "XDP backend equivalence manifest",
+  "type": "object",
+  "required": ["generated_at", "profile", "kernel", "corpus_sha256", "program_sha256", "backends", "cases"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "profile": { "enum": ["virtio_vm", "baremetal_nic"] },
+    "kernel": { "type": "string" },
+    "nic_model": { "type": "string" },
+    "driver": { "type": "string" },
+    "corpus_sha256": { "type": "string" },
+    "program_sha256": { "type": "string" },
+    "harness_commit": { "type": "string" },
+    "backends": { "type": "array", "items": { "type": "string" } },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["test_id", "equivalent"],
+        "properties": {
+          "test_id": { "type": "integer" },
+          "equivalent": { "type": "boolean" },
+          "class": { "enum": ["A", "B", "C"] },
+          "disposition": { "type": "object" },
+          "fingerprints": { "type": "object" },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}
