@@ -1,104 +1,134 @@
 ---
 title: "Same XDP Program, Three Backends: Building a Differential Tester for Native, Generic, and AF_XDP"
 published: false
-description: XDP is marketed as run-anywhere kernel bypass. Native, generic SKB, and AF_XDP paths disagree more often than operators admit. Here's the harness we're open-sourcing — VM for reproducibility, real NIC for truth.
-tags: linux, networking, ebpf, devops, security
+description: XDP is marketed as run-anywhere kernel bypass. Native, generic SKB, and AF_XDP paths disagree more often than operators admit. This post describes an open harness — VM for reproducibility, wired NIC for driver-level checks.
+tags: linux, networking, ebpf, security
 canonical_url: https://dev.to/PLACEHOLDER
 ---
 
-You load one `.o` file. You attach it with `ip link set dev eth0 xdp obj prog.o`. In production, that program might run in **native XDP** on a Mellanox uplink, in **generic (SKB) XDP** on a VM NIC that has no driver offload, or behind **AF_XDP** after a redirect to userspace. The BPF bytecode is the same. The observable packet fate often is not.
+You load one `.o` file. You attach it with `ip link set dev eth0 xdp obj prog.o`. In production, that program might run in **native XDP** on a datacenter uplink, in **generic (SKB) XDP** on a VM NIC without driver offload, or behind **AF_XDP** after a redirect to userspace. The BPF bytecode is the same. The observable packet fate often is not.
 
-I have shipped both layers on sovereign bare-metal platforms — TC microsegmentation on guest interfaces and custom XDP on bonded uplinks — and the operational assumption is always the same: *if the verifier accepted it, behaviour is portable*. That assumption is rarely tested systematically. Conformance means the program loads. Differential testing means: **given identical input packets, do all backends produce identical disposition, post-hook bytes, and metadata?**
+A common operational assumption is: *if the verifier accepted it, behaviour is portable*. Conformance testing usually stops at load time. **Differential testing** asks a stricter question: given identical input packets, do all backends produce the same disposition, post-hook bytes, and metadata?
 
-After a differential harness for open-source eMRTD readers ([case study](https://dev.to/kazuru_73322ef9a7d6ed2b18/differential-testing-revealed-what-conformance-testing-missed-a-case-study-with-open-source-emrtd-1nie)), the next obvious move was kernel datapath: fix the program, fix the corpus, swap "library" for "XDP backend," swap APDU traces for packet captures. This post is Part 1 — the blueprint, the artifact, and the VM-plus-NIC reproduction strategy — before the divergence taxonomy table is frozen.
+This post documents the harness blueprint, reproduction layout, and measurement model. A separate results write-up will publish pinned divergence manifests once bare-metal lab runs complete.
 
 ## Native, generic, and AF_XDP are not the same runtime
 
-**Native XDP** runs at the driver ingress hook, before `sk_buff` allocation. You get early drops, real frame layout, and (when the driver supports it) the metadata surface your program expects.
+**Native XDP** runs at the driver ingress hook, before `sk_buff` allocation. Programs see early drops, frame layout as presented by the driver, and (when supported) the metadata surface the program expects.
 
-**Generic XDP** (`xdpgeneric`, SKB mode) runs later — on the `netif_receive_skb` path. No driver XDP support required. That convenience buys you a different packet representation: VLAN tags may already be stripped, fragments may look different, `data_meta` may be NULL when your native run had headroom.
+**Generic XDP** (`xdpgeneric`, SKB mode) runs later on the `netif_receive_skb` path. No driver XDP support is required. That path uses a different packet representation: VLAN tags may already be stripped, fragments may differ, and `data_meta` may be NULL where native mode had headroom.
 
-**AF_XDP** is not a fourth execution engine in parallel to those two. It is a **redirect target**: native XDP sends matching frames to an AF_XDP socket; userspace completes the policy. We include it as a third *observation point* because production stacks (Cilium, Katran, custom filters) routinely split work across kernel and userspace. Any equivalence claim that ignores that boundary is incomplete.
+**AF_XDP** is not a parallel in-kernel backend. It is a **redirect target**: native XDP can send matching frames to an AF_XDP socket; userspace may complete policy there. We treat it as a third observation point because stacks such as Cilium, Katran, and custom filters routinely split work across kernel and userspace. Equivalence claims that ignore that boundary are incomplete.
 
-We are **not** claiming hardware SmartNIC offload in this study. Reproducing Netronome or signed-firmware offload across labs is a reproducibility dead end. That stays future work.
+Hardware SmartNIC offload is **out of scope** for this harness. Reproducing Netronome or signed-firmware offload across independent labs is not practical for a portable artifact.
 
-## VM plus real NIC — use both
+## VM plus wired NIC — use both
 
-**A VM is enough for the reproducible artifact. A real NIC is enough for production-grade claims.**
-
-| Layer | VM (virtio / veth) | Real NIC (mlx5, i40e, igc) |
+| Layer | VM (virtio / veth) | Wired NIC (mlx5, i40e, igc, tg3, …) |
 | --- | --- | --- |
-| Native vs generic XDP | virtio_net on 6.8+ | primary findings |
-| Corpus + comparator | bit-exact for strangers | same harness |
-| Driver quirks | virtio only | mlx5 vs i40e divergence |
-| PCI passthrough | real mlx5/i40e inside VM | recommended lab setup |
+| Native vs generic XDP | virtio_net on 6.8+ | driver-specific behaviour |
+| Corpus + comparator + manifest | portable reproduce path | same harness |
+| Driver-specific quirks | virtio only | mlx5, i40e, tg3, etc. |
+| PCI passthrough to VM | real driver inside guest | supported |
+| Hardware offload | out of scope | out of scope |
 
-**VM role:** pinned kernel, virtio or passthrough NIC, `make sweep` → `run_manifest.json`.
+**VM profile:** pinned kernel (6.8.x), virtio or PCI-passthrough NIC, `make sweep-virtio` → manifest. Anyone with a Linux VM can reproduce the harness loop.
 
-**Real NIC role:** VLAN, checksum, and metadata divergences operators hit on uplinks. Publish separate manifests: `results_virtio_vm.json` and `results_baremetal_<driver>.json`.
+**Wired NIC profile:** VLAN edge cases, checksum handling, metadata differences visible on physical ports. Store **two manifest files**: `run_manifest_virtio_vm_*.json` and `run_manifest_baremetal_nic_*.json`. Do not merge them without labeling the profile.
 
-Recommended hardware: **Mellanox ConnectX-4/5** (`mlx5`) + **Intel X710** (`i40e`). Minimum: one **Intel I350** (`igb`). See [`docs/VM-VS-BAREMETAL.md`](VM-VS-BAREMETAL.md).
+Lab hardware that covers common splits: Mellanox ConnectX (`mlx5`) and Intel X710 (`i40e`). A single Intel I350-class port (`igb` / `igc`) is enough for an initial wired run. PCI passthrough into a VM preserves driver semantics with snapshot rollback.
 
 ## What we measure
 
-For each corpus packet (paired by embedded test ID):
+For each corpus packet, paired by embedded test ID:
 
-| Check | Equivalent when |
-| --- | --- |
-| Disposition | PASS / DROP / TX / REDIRECT match |
-| Post-XDP bytes | Bitwise match on masked regions |
-| Metadata | Match where defined; Class A if SKB NULL is expected |
-| Checksums | Flag divergence (offload disabled on measure iface) |
+| Check | Capture | Equivalent when |
+| --- | --- | --- |
+| Disposition | `xdpdump` / BPF action trace | `PASS` / `DROP` / `TX` / `REDIRECT` match |
+| Post-XDP bytes | `xdpdump` at the hook | Bitwise match on masked regions |
+| Metadata | `ingress_ifindex`, `data_meta` | Match where defined; Class A if generic NULL is documented |
+| Checksums | L3/L4 in captured frame | Divergence flagged — offload disabled for measurement |
 
-**Class A** — documented backend difference. **Class B** — operator-surprising gap. **Class C** — harness bug.
+Divergence classes:
+
+- **Class A** — documented backend difference  
+- **Class B** — operator-surprising gap  
+- **Class C** — harness or capture artifact  
 
 ## Corpus and programs
 
-Eleven deterministic Scapy-generated cases: IPv4/IPv6 SYN, VLAN, QinQ, fragment, ICMP, UDP zero-checksum, FIN/ACK, zero payload, MTU fill, DSCP/ECN.
+Eleven deterministic Scapy cases: IPv4/IPv6 SYN, VLAN, QinQ, IPv4 fragment, ICMP, UDP zero-checksum, FIN/ACK, zero payload, MTU fill, DSCP/ECN. Each frame embeds a test ID in the payload or L4 header field.
 
-Program family (phase 1 ships `prog_pass_drop`):
+The repository currently ships `prog_pass_drop.o` (disposition baseline). Additional programs (`prog_l3_modify`, `prog_vlan`, `prog_redirect`) are planned so each test isolates one behaviour.
 
-- `prog_pass_drop.o` — disposition baseline  
-- `prog_l3_modify.o`, `prog_vlan.o`, `prog_redirect.o` — coming next  
-
-## Harness sketch
+## Harness architecture
 
 ```text
-corpus.pcap → inject on peer veth (RX!) → XDP native|generic → xdpdump → compare.py
+corpus.pcap
+    │
+injector (peer veth / second netns)   ← RX path; not tcpreplay TX on same iface
+    │
+ingress + XDP (native | generic)
+    │
+xdpdump → output_<backend>.pcap
+    │
+compare.py → run_manifest.json
 ```
 
-Pitfalls: capture at hook (not egress-only tcpdump), disable checksum offload, detach XDP between runs.
+Documented pitfalls: capture at the hook, disable checksum offload on measurement NICs, detach XDP between backend runs, and include a negative-control packet that must agree on all backends.
+
+## AF_XDP (not yet in the sweep)
+
+The current sweep compares **native vs generic** in-kernel only. AF_XDP support will add a redirect path plus userspace observation; checksum-sensitive operations stay out of that path until the comparator can treat them consistently.
 
 ## Run it yourself
 
 https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness
 
+Checkout tag **`blog-x01-2026-07`** — that pin matches this post.
+
 ```bash
 git clone https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness.git
 cd xdp-backend-equiv-harness
-git checkout blog-x01-2026-07
-make deps
+git checkout blog-x01-2026-07   # commit 6e6a92d
+
+sudo apt-get install -y clang llvm libbpf-dev python3-scapy xdp-tools make linux-headers-$(uname -r)
+
 make corpus
+make build
 sudo make topology
 sudo make sweep-virtio
 ```
 
-Bare metal or PCI-passthrough NIC:
+Virtio smoke gate:
 
 ```bash
-export NIC=eth0
-sudo ethtool -K $NIC rx off tx off
-sudo make sweep-nic
+bash scripts/smoke.sh
 ```
 
-Phase 1 is **native vs generic** only. AF_XDP is phase 2.
+Wired NIC (loop-cable ports, carrier up on both):
 
-## Closing
+```bash
+export NIC=ens16f0
+export INJ_IFACE=ens16f1
+sudo bash scripts/baremetal-sweep.sh
+```
 
-XDP sold us compile once, attach anywhere. Fleet reality is mixed kernels, mixed NICs, and generic fallback on VMs. A differential tester with a provenance manifest is how you learn where anywhere ends.
+See [`docs/BAREMETAL-LAB.md`](https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness/blob/main/docs/BAREMETAL-LAB.md) for PCI passthrough, default lab IPs (`192.168.0.5` / `192.168.0.6`), and carrier checks.
 
-VM gets strangers a green reproduce button. A real NIC — including one passed through to a VM — gets you divergences that matter on uplinks.
+Outputs: `manifests/run_manifest_<profile>_<prog>.json`.
+
+## Status
+
+| Profile | State |
+| --- | --- |
+| **virtio_vm** | Verified — 11 corpus cases, 0 divergences on kernel 6.8 (lab) |
+| **baremetal_nic** | Pending — requires loop-cabled wired ports; WiFi out of scope |
+
+WiFi interfaces are not supported as an observation point in this harness; wired ethernet is required for the bare-metal profile.
 
 ---
 
-*Synthetic lab traffic only. Tag `blog-x01-2026-07` pins this post.*
+Further reading: [xdp-tools / xdpdump](https://github.com/xdp-project/xdp-tools) · [AF_XDP](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)
+
+*Synthetic lab traffic only. No production traffic. Results tagged per NIC model and kernel version.*
