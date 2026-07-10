@@ -1,6 +1,6 @@
-.PHONY: deps corpus build topology topology-nic sweep-virtio sweep-nic smoke baremetal-sweep validate-comparator clean
+.PHONY: deps corpus build topology topology-nic sweep-virtio sweep-all-virtio sweep-nic smoke baremetal-sweep validate-comparator clean
 
-PROGS := pass_drop metadata_test vlan_probe
+PROGS := pass_drop metadata_test vlan l3_modify redirect vlan_probe
 
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
@@ -37,6 +37,9 @@ topology-nic:
 
 sweep-virtio:
 	sudo PROFILE=virtio_vm bash harness/sweep.sh
+
+sweep-all-virtio:
+	bash scripts/sweep-all-virtio.sh
 
 sweep-nic: baremetal-sweep
 

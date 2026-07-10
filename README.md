@@ -26,7 +26,8 @@ make deps
 make corpus
 sudo make topology      # veth + netns injector
 make build
-sudo make sweep-virtio  # native + generic on lab veth/virtio
+sudo make sweep-virtio  # native + generic on lab veth/virtio (one program)
+bash scripts/sweep-all-virtio.sh  # all five blog programs
 ```
 
 Outputs: `manifests/run_manifest_*.json`, `captures/output_*.pcap`.

@@ -15,7 +15,7 @@ Native XDP and generic SKB-mode XDP are not semantic equivalents. The same BPF b
 3. Operational divergence taxonomy (Class A/B/C) for interpreting differences.
 4. Virtio/veth smoke gate on Linux 6.8 (lab) demonstrating end-to-end reproduction.
 
-**Scope.** This post compares **native vs generic XDP** only, on **`prog_pass_drop`** only, on the **virtio_vm** profile only. Bare-metal NIC results, multi-program sweeps, and AF_XDP observation are future work.
+**Scope.** This post publishes the harness methodology and **virtio/veth results for five BPF programs** (today's lab run). Bare-metal NIC sweeps require a loop-cabled dual-port pair — not yet completed in our lab (passthrough ports show `NO-CARRIER`). AF_XDP as a third observation point is future work.
 
 Conformance testing stops at verifier load time. **Differential testing** asks: given identical input packets, do backends produce the same observable outcome at the hook?
 
@@ -55,7 +55,7 @@ Each frame embeds a test ID in the TCP/UDP sport, ICMP id, or payload tail so `c
 | 0xA00B | MTU-sized fill | Large frame | PASS |
 | 0xA00C | DSCP/ECN | IP TOS field | PASS |
 
-Coverage map: L2 (VLAN/QinQ), L3 (IPv4/IPv6/frag/TOS), L4 (TCP/UDP/ICMP), checksum edge, MTU fill. Additional programs (`prog_l3_modify`, `prog_vlan`, `prog_redirect`) are planned so each behaviour is isolated.
+Coverage map: L2 (VLAN/QinQ), L3 (IPv4/IPv6/frag/TOS), L4 (TCP/UDP/ICMP), checksum edge, MTU fill. Additional programs isolate behaviours: `prog_metadata_test` (`data_meta` headroom), `prog_vlan` (802.1Q rewrite), `prog_l3_modify` (TTL decrement), `prog_redirect` (same-port `XDP_REDIRECT`).
 
 ## What the comparator measures (v1)
 
@@ -114,7 +114,7 @@ compare.py → manifests/run_manifest_virtio_vm_pass_drop.json
 | **virtio_vm** | veth + netns inject | Any Linux VM / host | `sudo make topology && sudo make sweep-virtio` or `bash scripts/smoke.sh` |
 | **baremetal_nic** | dual-port + loop cable | Wired NIC (`mlx5`, `i40e`, `igc`, `tg3`, …) | `export NIC=… INJ_IFACE=…; sudo make baremetal-sweep` |
 
-`scripts/smoke.sh` wraps corpus + build + topology + sweep + a minimum case-count check — use it as the **pass/fail gate**. `make sweep-virtio` is the same sweep without the exit-code wrapper.
+`scripts/smoke.sh` wraps corpus + build + topology + sweep + a minimum case-count check — use it as the **pass/fail gate**. `make sweep-virtio` runs one program; `bash scripts/sweep-all-virtio.sh` sweeps all five blog programs on veth.
 
 **Why a loop cable on bare metal?** XDP is an ingress hook. Injecting on the same NIC you attach to hits the TX path; a peer port (physical or veth) puts traffic on RX where native vs generic semantics differ.
 
@@ -123,6 +123,24 @@ compare.py → manifests/run_manifest_virtio_vm_pass_drop.json
 - **mlx5** (ConnectX): mature native XDP; common in high-throughput lab setups.
 - **i40e** (X710 class): different driver architecture; VLAN/metadata edge cases.
 - **igb/igc** (I350 class): accessible hardware; exercises generic fallback on ports without full native XDP.
+
+## Results
+
+We evaluated the harness on the **virtio_vm** profile (Linux **6.8.0-134-generic**, veth + netns inject) across five programs:
+
+| Program | Cases paired | Divergences (native vs generic) |
+| --- | --- | --- |
+| `prog_pass_drop` | 11 / 11 | **0** |
+| `prog_metadata_test` | 11 / 11 | **0** |
+| `prog_vlan` | 11 / 11 | **0** |
+| `prog_l3_modify` | 11 / 11 | **0** |
+| `prog_redirect` | 11 / 11 | **0** |
+
+Pinned manifests: `manifests/run_manifest_virtio_vm_<program>.json` in the repository.
+
+**What this means.** Zero divergences on veth means native and generic **presented identical post-hook frames to `xdpdump`** for these programs on this topology — not that backends always agree on every NIC. `prog_metadata_test` is designed to surface Class A `data_meta` semantics; on veth both backends still produced matching captures (disposition and visible bytes aligned). That is a real negative result worth reporting: the harness ran, the comparator has teeth (see below), and this profile did not surface backend splits.
+
+**Bare-metal (pending).** PCI passthrough ports (`ens16f0` / `ens16f1`, BCM5720 class) in our VM show `NO-CARRIER` without a loop cable — we have not published bare-metal manifests yet. When loop-cabled, the same five-program sweep (`make baremetal-sweep` with `NIC` / `INJ_IFACE` set) is the path to Class B findings (e.g. VLAN tag visibility under RX offload). That profile is the paper hook; this post ships the methodology and virtio baseline.
 
 ## Validation
 
@@ -147,11 +165,12 @@ Run the full validation bundle:
 ```bash
 bash scripts/comparator-sensitivity.sh   # self-test + optional live probes
 # or: make validate-comparator
+bash scripts/sweep-all-virtio.sh         # all five programs on veth
 ```
 
 ### Live backend probes (informational)
 
-The repository also ships `prog_metadata_test` (checks `data_meta` headroom) and `prog_vlan_probe` (PASS when 802.1Q is visible at L2). On our **6.8 veth lab run**, both probes still reported **0 capture divergences** — native and generic presented identical frames to `xdpdump`. We keep these programs for bare-metal and driver-specific profiles where backend differences are more likely. The self-test above is the publish gate for comparator teeth.
+The repository ships `prog_metadata_test`, `prog_vlan`, `prog_l3_modify`, and `prog_redirect` alongside `prog_vlan_probe` (802.1Q visibility probe). On our **6.8 veth lab run**, all five sweeps above reported **0 capture divergences**. We keep these programs for bare-metal and driver-specific profiles where backend differences are more likely. The self-test above is the publish gate for comparator teeth.
 
 Example manifest excerpt (`prog_pass_drop`, smoke gate):
 
@@ -173,7 +192,7 @@ Example manifest excerpt (`prog_pass_drop`, smoke gate):
 }
 ```
 
-(`test_id` 40961 = 0xA001.) This validates end-to-end harness operation. Pinned manifests for bare-metal profiles ship in a follow-up post.
+(`test_id` 40961 = 0xA001.) Full manifests for all five virtio programs are in the repository. Bare-metal profiles ship when loop-cabled hardware is available.
 
 ## Run it yourself
 
@@ -190,18 +209,20 @@ sudo apt-get install -y clang llvm libbpf-dev python3-scapy xdp-tools make \
 
 bash scripts/smoke.sh
 bash scripts/comparator-sensitivity.sh
+bash scripts/sweep-all-virtio.sh
 ```
 
-**Troubleshooting:** `smoke.sh` exits non-zero if `xdpdump` or `clang` is missing, topology cannot create veth/netns (often stale `veth-a` — rerun `sudo make topology`), fewer than 11 paired test IDs in the manifest, or sweep/comparator failure. Run with `sudo` where shown; kernel **6.8+** matches the tagged lab gate.
+**Troubleshooting:** `smoke.sh` exits non-zero if `xdpdump` or `clang` is missing, topology cannot create veth/netns (often stale `veth-a` — rerun `sudo make topology`), fewer than 11 paired test IDs in the manifest, or sweep/comparator failure. If you see `Native and generic XDP can't be active at the same time`, ensure both `xdp off` and `xdpgeneric off` ran between backend captures (fixed in current `harness/sweep.sh`). Run with `sudo` where shown; kernel **6.8+** matches the tagged lab gate.
 
-Outputs: `manifests/run_manifest_virtio_vm_pass_drop.json`.
+Outputs: `manifests/run_manifest_virtio_vm_*.json`.
 
 Bare-metal (when loop-cabled): see [`docs/BAREMETAL-LAB.md`](https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness/blob/main/docs/BAREMETAL-LAB.md).
 
 ## Future work
 
-- Bare-metal NIC manifests (loop-cabled `mlx5` / `i40e` / `igc` profiles).
-- Additional BPF programs (modify, VLAN, redirect) and v2 comparator fields (disposition, metadata class).
+- Bare-metal NIC manifests (loop-cabled `mlx5` / `i40e` / `igc` / BCM5720 profiles) — Class B divergence hunting.
+- Comparator v2 fields (disposition, metadata class, field masks for `prog_l3_modify`).
+- DEVMAP-based redirect to a peer interface (current `prog_redirect` uses same-port reinject).
 - AF_XDP redirect path as a third observation point.
 - Related-work comparison with kernel BPF selftests and `xdp-tools` (this harness targets cross-backend **equivalence**, not single-backend correctness).
 

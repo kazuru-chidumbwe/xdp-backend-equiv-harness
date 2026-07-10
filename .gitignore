@@ -1,6 +1,7 @@
 build/
 captures/
 manifests/*.json
+!manifests/run_manifest_virtio_vm_*.json
 !manifests/.gitkeep
 corpus/corpus.pcap
 *.o

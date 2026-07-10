@@ -23,6 +23,7 @@ sha256_file() {
 
 detach_xdp() {
   ip link set dev "$IFACE" xdp off 2>/dev/null || true
+  ip link set dev "$IFACE" xdpgeneric off 2>/dev/null || true
 }
 
 load_backend() {
