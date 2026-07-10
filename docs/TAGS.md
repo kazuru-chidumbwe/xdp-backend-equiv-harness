@@ -4,7 +4,7 @@ Annotated tags mark reproducible anchors. **`main` may advance** after a tag —
 
 | Tag | Commit | Purpose |
 | --- | --- | --- |
-| [`blog-x01-2026-07`](https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness/tree/blog-x01-2026-07) | `985df03` | **Dev.to X01a essay** — virtio smoke + harness blueprint |
+| [`blog-x01-2026-07`](https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness/tree/blog-x01-2026-07) | `6e6a92d` | **Dev.to X01a essay** — virtio smoke + baremetal rerun docs |
 
 ## Quick checkout
 
