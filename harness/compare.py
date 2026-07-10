@@ -64,8 +64,13 @@ def compare(backends: dict[str, Path]) -> dict:
     rows = []
     for tid in all_tids:
         fps = {b: indices[b].get(tid) for b in backends}
-        ref = next(iter(fps.values()))
-        equiv = all(v == ref for v in fps.values() if v is not None)
+        present = [fps[b] for b in backends if fps[b] is not None]
+        if len(present) != len(backends):
+            equiv = False
+        elif not present:
+            equiv = True
+        else:
+            equiv = len(set(present)) == 1
         rows.append({"test_id": tid, "fingerprints": fps, "equivalent": equiv})
     root = Path.cwd()
     corpus_path = root / "corpus" / "corpus.pcap"

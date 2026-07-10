@@ -23,7 +23,9 @@ carrier() {
 }
 
 make corpus
-make build
+PROG="${PROG:-pass_drop}"
+export PROG
+make build PROG="$PROG"
 
 bash harness/topology-dual-nic.sh
 
@@ -39,9 +41,10 @@ PROFILE=baremetal_nic bash harness/sweep.sh
 
 python3 - <<'PY'
 import json
+import os
 from pathlib import Path
 
-p = Path("manifests/run_manifest_baremetal_nic_pass_drop.json")
+p = Path("manifests") / f"run_manifest_baremetal_nic_{os.environ.get('PROG', 'pass_drop')}.json"
 d = json.loads(p.read_text())
 n = len(d.get("cases", []))
 if n < 1:

@@ -1,6 +1,6 @@
 ---
-title: "A Differential Test Harness for Native vs. Generic XDP"
-description: Native and generic SKB-mode XDP are not semantic equivalents. This post publishes the harness methodology, corpus design, and a virtio smoke gate — not a full divergence study.
+title: "A Differential Test Harness for Native vs. Generic XDP: Methodology and Baseline"
+description: Native and generic SKB-mode XDP are not semantic equivalents. This post publishes the harness methodology, corpus design, virtio baseline sweeps, and comparator validation — not a full divergence study.
 tags: linux, networking, ebpf, security
 ---
 
@@ -11,7 +11,7 @@ Native XDP and generic SKB-mode XDP are not semantic equivalents. The same BPF b
 **Contributions.**
 
 1. Harness loop: corpus → inject on RX path → native vs generic sweep → `xdpdump` capture → `compare.py` manifest.
-2. Deterministic corpus with eleven embedded test IDs (non-contiguous: `0xA001`, `0xA002`, `0xA003`, `0xA004`, `0xA005`, `0xA007`, `0xA008`, `0xA009`, `0xA00A`, `0xA00B`, `0xA00C`).
+2. Deterministic corpus with eleven embedded test IDs (non-contiguous: `0xA001`–`0xA005`, `0xA007`–`0xA00C`; **`0xA006` omitted** — reserved gap in the generator's ID assignment).
 3. Operational divergence taxonomy (Class A/B/C) for interpreting differences.
 4. Virtio/veth smoke gate on Linux 6.8 (lab) demonstrating end-to-end reproduction.
 
@@ -59,15 +59,16 @@ Coverage map: L2 (VLAN/QinQ), L3 (IPv4/IPv6/frag/TOS), L4 (TCP/UDP/ICMP), checks
 
 ## What the comparator measures (v1)
 
-The current `compare.py` implements **capture-level equivalence**:
+The current `compare.py` implements **capture-level equivalence** (v1):
 
 1. **Pairing:** extract test ID from each `xdpdump` frame (payload tail, TCP/UDP sport, or ICMP id in range `0xA000`–`0xA0FF`).
-2. **Fingerprint:** SHA-256 of the full post-hook frame bytes captured by `xdpdump` (truncated to 16 hex chars in the manifest).
-3. **Verdict:** for each test ID, `equivalent: true` when native and generic fingerprints match; otherwise count as one divergence.
+2. **Capture point:** sweeps use `xdpdump --rx-capture=exit` (post-program frame bytes; default `xdpdump` is entry-only).
+3. **Fingerprint:** SHA-256 of the captured frame bytes (truncated to 16 hex chars in the manifest).
+4. **Verdict:** for each test ID, `equivalent: true` only when **both** backends captured the ID **and** fingerprints match. A test ID present in one backend but missing in the other counts as a divergence.
 
-This encodes disposition and visible byte changes together — if one backend drops and the other passes, captures differ and the case flags non-equivalent. The manifest schema reserves `disposition`, `class`, and per-field metadata for a v2 comparator; v1 does not populate them yet.
+**What v1 does not yet measure:** XDP disposition (`PASS`/`DROP`/`REDIRECT`) when both backends capture the same bytes at exit — e.g. identical post-hook frames with different verdict metadata. Comparator v2 will read `pcapng` ebpf verdict fields and populate manifest `disposition` / `class`. Until then, programs that only change verdicts without changing bytes may show **0 fingerprint divergences** even when backends disagree (see `prog_metadata_test` below).
 
-**Non-deterministic fields:** `prog_pass_drop` does not modify headers. Packets traverse ingress RX only (no routing), checksum offload is disabled on bare-metal runs, and veth injection does not rewrite TTL or IP ID. For future programs that modify headers (`prog_l3_modify`), comparator v2 will support mask files to exclude timestamps, IDs, and checksum fields. Until then, pass/drop-only programs treat full-frame SHA-256 as a valid equivalence proxy on this topology.
+**Non-deterministic fields:** `prog_pass_drop` does not modify headers. Packets traverse ingress RX only (no routing), checksum offload is disabled on bare-metal runs, and veth injection does not rewrite TTL or IP ID. For header-mutating programs (`prog_l3_modify`, `prog_vlan`), exit capture reflects modifications; comparator v2 will add mask files for checksum/IP-ID fields where needed.
 
 **Measurement controls (bare-metal profile):** disable RX/TX checksum and RX VLAN offload before sweep:
 
@@ -138,9 +139,11 @@ We evaluated the harness on the **virtio_vm** profile (Linux **6.8.0-134-generic
 
 Pinned manifests: `manifests/run_manifest_virtio_vm_<program>.json` in the repository.
 
-**What this means.** Zero divergences on veth means native and generic **presented identical post-hook frames to `xdpdump`** for these programs on this topology — not that backends always agree on every NIC. `prog_metadata_test` is designed to surface Class A `data_meta` semantics; on veth both backends still produced matching captures (disposition and visible bytes aligned). That is a real negative result worth reporting: the harness ran, the comparator has teeth (see below), and this profile did not surface backend splits.
+**What this means.** Zero divergences on veth means native and generic **presented identical exit-capture frame bytes** for these programs on this topology — not that backends always agree on every NIC.
 
-**Bare-metal (pending).** PCI passthrough ports (`ens16f0` / `ens16f1`, BCM5720 class) in our VM show `NO-CARRIER` without a loop cable — we have not published bare-metal manifests yet. When loop-cabled, the same five-program sweep (`make baremetal-sweep` with `NIC` / `INJ_IFACE` set) is the path to Class B findings (e.g. VLAN tag visibility under RX offload). That profile is the paper hook; this post ships the methodology and virtio baseline.
+**Why `prog_metadata_test` shows 0 on veth (not a bug).** The program returns `XDP_PASS` when `data_meta < data` (headroom exists), else `XDP_DROP`. It does not check for NULL — `data_meta` is always a kernel boundary pointer. On our **6.8 veth** run, both native and generic exposed the **same** headroom relationship, so both backends took the same disposition path and produced matching exit captures. That is a profile-specific negative result, not proof that `data_meta` never diverges. Generic SKB XDP on physical NICs is where Class A `data_meta` gaps are expected; bare-metal sweeps are the paper hook. If backends disagree on verdict but not bytes, v1 fingerprinting alone will still show 0 — another reason we label this a methodology/baseline post, not a discovery paper yet.
+
+**Bare-metal (pending).** PCI passthrough ports (`ens16f0` / `ens16f1`, BCM5720 class) in our VM show `NO-CARRIER` without a loop cable — we have not published bare-metal manifests yet. When loop-cabled, run `sudo NIC=… INJ_IFACE=… PROG=metadata_test make baremetal-sweep` (or `scripts/sweep-all-virtio.sh` on veth) — that is the path to Class A/B findings (e.g. VLAN tag visibility under RX offload).
 
 ## Validation
 
@@ -158,7 +161,7 @@ Zero mismatches here means native and generic **agreed on captured frames** for 
 
 ### Comparator sensitivity (synthetic)
 
-`scripts/comparator-selftest.py` feeds `compare.py` two pcaps with the same test ID (`0xA099`) and intentionally different post-hook bytes (TTL change). Result: **`divergence_count: 1`**. This proves the comparator flags differences when they exist — it is not a tautology locked to zero.
+`scripts/comparator-selftest.py` feeds `compare.py` two pcaps with the same test ID (`0xA099`) and intentionally different post-hook bytes (TTL change). Result: **`divergence_count: 1`**. `scripts/comparator-missing-tid-test.py` verifies that a test ID present on only one backend also counts as a divergence. Together these prove the comparator flags differences when they exist — it is not a tautology locked to zero.
 
 Run the full validation bundle:
 
@@ -205,7 +208,7 @@ git checkout blog-x01-2026-07
 
 sudo apt-get install -y clang llvm libbpf-dev python3-scapy xdp-tools make \
   linux-tools-common linux-headers-$(uname -r)
-# bpftool: from linux-tools-common on Ubuntu/Debian (package name may be bpftool on others)
+# xdpdump ships in xdp-tools (Ubuntu/Debian). If missing: build from https://github.com/xdp-project/xdp-tools
 
 bash scripts/smoke.sh
 bash scripts/comparator-sensitivity.sh

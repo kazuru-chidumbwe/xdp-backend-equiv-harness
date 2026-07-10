@@ -14,6 +14,8 @@ SECTION="xdp"
 PROFILE="${PROFILE:-virtio_vm}"
 CAPTURE_DIR="captures"
 MANIFEST_DIR="manifests"
+# exit = post-XDP frame + action; entry only sees pre-program bytes (misses disposition-only diffs).
+XDP_CAPTURE_MODE="${XDP_CAPTURE_MODE:-exit}"
 
 mkdir -p "$CAPTURE_DIR" "$MANIFEST_DIR"
 
@@ -44,7 +46,7 @@ capture_backend() {
     echo "xdpdump not found — install xdp-tools" >&2
     exit 1
   fi
-  timeout 8 xdpdump -i "$IFACE" -w "$out" &
+  timeout 8 xdpdump -i "$IFACE" --rx-capture="$XDP_CAPTURE_MODE" -w "$out" &
   local xdppid=$!
   sleep 0.5
   ip netns exec "$NS_INJ" python3 harness/inject.py corpus/corpus.pcap "$INJ_IFACE"
