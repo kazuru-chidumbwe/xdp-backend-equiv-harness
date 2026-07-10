@@ -92,7 +92,7 @@ Checkout tag **`blog-x01-2026-07`** — that pin matches this post.
 ```bash
 git clone https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness.git
 cd xdp-backend-equiv-harness
-git checkout blog-x01-2026-07   # commit a50bf63
+git checkout blog-x01-2026-07   # commit b8dc03f
 
 sudo apt-get install -y clang llvm libbpf-dev python3-scapy xdp-tools make \
   linux-tools-common linux-headers-$(uname -r)
