@@ -33,9 +33,7 @@ topology-nic:
 sweep-virtio:
 	sudo PROFILE=virtio_vm bash harness/sweep.sh
 
-sweep-nic:
-	@test -n "$$NIC" || (echo "Set NIC=ens16f0 (XDP target)" && exit 1)
-	sudo NIC=$$NIC INJ_IFACE=$${INJ_IFACE:-ens16f1} NS_INJ=xdpequiv-inj PROFILE=baremetal_nic bash harness/sweep.sh
+sweep-nic: baremetal-sweep
 
 smoke:
 	bash scripts/smoke.sh

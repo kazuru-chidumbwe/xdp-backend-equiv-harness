@@ -17,7 +17,8 @@ git clone https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness.git
 cd xdp-backend-equiv-harness
 git checkout blog-x01-2026-07   # or main
 
-sudo apt-get install -y clang llvm libbpf-dev python3-scapy xdp-tools make linux-headers-$(uname -r)
+sudo apt-get install -y clang llvm libbpf-dev python3-scapy xdp-tools make \
+  linux-tools-common linux-headers-$(uname -r)
 
 # Virtio / veth gate (always run first)
 bash scripts/smoke.sh
@@ -34,10 +35,10 @@ sudo bash scripts/baremetal-sweep.sh
 Or one Makefile target after cable + carrier check:
 
 ```bash
-sudo NIC=ens16f0 INJ_IFACE=ens16f1 make topology-nic
-sudo ethtool -K ens16f0 rx off tx off
-sudo NIC=ens16f0 INJ_IFACE=ens16f1 make sweep-nic
+sudo NIC=ens16f0 INJ_IFACE=ens16f1 make baremetal-sweep
 ```
+
+(`make sweep-nic` is an alias to the same target.)
 
 ## Verify link before sweep
 

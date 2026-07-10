@@ -62,7 +62,7 @@ if ! ip link show "$IFACE" >/dev/null 2>&1; then
 fi
 
 if [[ -n "${NIC:-}" ]]; then
-  ethtool -K "$IFACE" rx off tx off 2>/dev/null || true
+  ethtool -K "$IFACE" rx off tx off rx-vlan-offload off 2>/dev/null || true
   PROFILE="baremetal_nic"
 fi
 

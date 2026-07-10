@@ -33,12 +33,11 @@ Outputs: `manifests/run_manifest_*.json`, `captures/output_*.pcap`.
 
 **Bare-metal rerun** (loop-cabled PCI passthrough): [`docs/BAREMETAL-LAB.md`](docs/BAREMETAL-LAB.md) · `sudo NIC=ens16f0 make baremetal-sweep`
 
-For bare metal with a real NIC:
+For bare metal with a real NIC (after loop cable — see [`docs/BAREMETAL-LAB.md`](docs/BAREMETAL-LAB.md)):
 
 ```bash
-export NIC=eth0
-sudo ethtool -K $NIC rx off tx off    # disable offload for measurement
-sudo make sweep-nic
+export NIC=eth0 INJ_IFACE=eth1
+sudo make baremetal-sweep
 ```
 
 ## Layout

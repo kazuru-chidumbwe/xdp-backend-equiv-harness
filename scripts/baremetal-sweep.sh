@@ -34,7 +34,7 @@ if [[ "$c0" != "1" || "$c1" != "1" ]]; then
   exit 1
 fi
 
-ethtool -K "$NIC" rx off tx off 2>/dev/null || true
+ethtool -K "$NIC" rx off tx off rx-vlan-offload off 2>/dev/null || true
 PROFILE=baremetal_nic bash harness/sweep.sh
 
 python3 - <<'PY'
