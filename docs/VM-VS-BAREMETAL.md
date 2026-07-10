@@ -11,7 +11,7 @@
 
 - Mellanox mlx5 vs Intel i40e driver-specific metadata behaviour
 - Hardware XDP offload or SmartNIC programming
-- Bond/team upper-device edge cases on physical uplinks
+- Bond/team upper-device edge cases on physical lab ports
 - NIC firmware checksum behaviour under load
 
 ## Recommended dual-track workflow
@@ -28,14 +28,14 @@
 | NIC family | Driver | Notes |
 | --- | --- | --- |
 | Intel I350/I210 | `igc` / `igb` | Cheap, common |
-| Intel X710 | `i40e` | Data-center staple |
+| Intel X710 | `i40e` | Common wired lab NIC |
 | Mellanox ConnectX-4/5 | `mlx5` | Native XDP mature |
 
-One Intel + one Mellanox covers most operator fleet splits. A single $50 Intel NIC is enough for v1 blog tag.
+One Intel + one Mellanox covers the mlx5 vs i40e driver split we exercise in the lab. A single $50 Intel NIC is enough for v1 blog tag.
 
 ## WiFi (phase 1 — out of scope)
 
-**802.11 / `wlan0` is not a phase-1 observation point.** WiFi drivers generally lack native XDP; generic SKB XDP on wireless is inconsistent and not comparable to wired uplink semantics. Phase 1 bare-metal profiles require a **wired** NIC (`tg3`, `igc`, `i40e`, `mlx5`, etc.).
+**802.11 / `wlan0` is not a phase-1 observation point.** WiFi drivers generally lack native XDP; generic SKB XDP on wireless is inconsistent and not comparable to wired lab port semantics. Phase 1 bare-metal profiles require a **wired** NIC (`tg3`, `igc`, `i40e`, `mlx5`, etc.).
 
 ## VM setup
 

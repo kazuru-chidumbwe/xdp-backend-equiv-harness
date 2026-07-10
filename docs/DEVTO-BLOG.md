@@ -6,7 +6,7 @@ tags: linux, networking, ebpf, security
 canonical_url: https://dev.to/PLACEHOLDER
 ---
 
-You load one `.o` file. You attach it with `ip link set dev eth0 xdp obj prog.o`. In production, that program might run in **native XDP** on a datacenter uplink, in **generic (SKB) XDP** on a VM NIC without driver offload, or behind **AF_XDP** after a redirect to userspace. The BPF bytecode is the same. The observable packet fate often is not.
+You load one `.o` file. You attach it with `ip link set dev eth0 xdp obj prog.o`. In our lab, the same program might run in **native XDP** on a loop-cabled wired port, in **generic (SKB) XDP** on a VM virtio link without driver offload, or behind **AF_XDP** after a redirect to userspace. The BPF bytecode is the same. The observable packet fate often is not.
 
 A common operational assumption is: *if the verifier accepted it, behaviour is portable*. Conformance testing usually stops at load time. **Differential testing** asks a stricter question: given identical input packets, do all backends produce the same disposition, post-hook bytes, and metadata?
 
