@@ -1,4 +1,4 @@
-.PHONY: deps corpus build topology topology-nic sweep-virtio sweep-nic smoke clean
+.PHONY: deps corpus build topology topology-nic sweep-virtio sweep-nic smoke baremetal-sweep clean
 
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
@@ -39,6 +39,10 @@ sweep-nic:
 
 smoke:
 	bash scripts/smoke.sh
+
+baremetal-sweep:
+	@test -n "$$NIC" || (echo "Set NIC=ens16f0" && exit 1)
+	sudo NIC=$$NIC INJ_IFACE=$${INJ_IFACE:-ens16f1} bash scripts/baremetal-sweep.sh
 
 clean:
 	rm -rf build captures manifests/*.json

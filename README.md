@@ -31,6 +31,8 @@ sudo make sweep-virtio  # native + generic on lab veth/virtio
 
 Outputs: `manifests/run_manifest_*.json`, `captures/output_*.pcap`.
 
+**Bare-metal rerun** (loop-cabled PCI passthrough): [`docs/BAREMETAL-LAB.md`](docs/BAREMETAL-LAB.md) · `sudo NIC=ens16f0 make baremetal-sweep`
+
 For bare metal with a real NIC:
 
 ```bash

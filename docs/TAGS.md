@@ -12,6 +12,9 @@ Annotated tags mark reproducible anchors. **`main` may advance** after a tag —
 git checkout blog-x01-2026-07
 make corpus && make build
 sudo make topology && sudo make sweep-virtio
+
+# Bare-metal (loop cable required) — see docs/BAREMETAL-LAB.md
+sudo NIC=ens16f0 INJ_IFACE=ens16f1 make baremetal-sweep
 ```
 
 ## Tag policy
