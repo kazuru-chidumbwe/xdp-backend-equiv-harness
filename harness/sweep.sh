@@ -53,6 +53,7 @@ capture_backend() {
   detach_xdp
 }
 
+export PROG="${PROG:-pass_drop}"
 make corpus
 make build PROG="$PROG"
 
@@ -70,7 +71,7 @@ capture_backend native
 capture_backend generic
 
 MANIFEST="$MANIFEST_DIR/run_manifest_${PROFILE}_${PROG}.json"
-python3 harness/compare.py "$MANIFEST" \
+PROG="$PROG" python3 harness/compare.py "$MANIFEST" \
   "native:$CAPTURE_DIR/output_native_${PROG}.pcap" \
   "generic:$CAPTURE_DIR/output_generic_${PROG}.pcap"
 

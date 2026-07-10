@@ -1,4 +1,6 @@
-.PHONY: deps corpus build topology topology-nic sweep-virtio sweep-nic smoke baremetal-sweep clean
+.PHONY: deps corpus build topology topology-nic sweep-virtio sweep-nic smoke baremetal-sweep validate-comparator clean
+
+PROGS := pass_drop metadata_test vlan_probe
 
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
@@ -19,6 +21,9 @@ corpus:
 
 build: $(OBJ)
 
+build-all:
+	@for p in $(PROGS); do $(MAKE) build PROG=$$p; done
+
 $(OBJ): programs/prog_$(PROG).c
 	mkdir -p build
 	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
@@ -37,6 +42,9 @@ sweep-nic: baremetal-sweep
 
 smoke:
 	bash scripts/smoke.sh
+
+validate-comparator:
+	bash scripts/comparator-sensitivity.sh
 
 baremetal-sweep:
 	@test -n "$$NIC" || (echo "Set NIC=ens16f0" && exit 1)

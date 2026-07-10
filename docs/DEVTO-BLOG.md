@@ -11,7 +11,7 @@ Native XDP and generic SKB-mode XDP are not semantic equivalents. The same BPF b
 **Contributions.**
 
 1. Harness loop: corpus → inject on RX path → native vs generic sweep → `xdpdump` capture → `compare.py` manifest.
-2. Deterministic corpus with embedded test IDs (0xA001–0xA00C) covering L2–L4 edge cases.
+2. Deterministic corpus with eleven embedded test IDs (non-contiguous: `0xA001`, `0xA002`, `0xA003`, `0xA004`, `0xA005`, `0xA007`, `0xA008`, `0xA009`, `0xA00A`, `0xA00B`, `0xA00C`).
 3. Operational divergence taxonomy (Class A/B/C) for interpreting differences.
 4. Virtio/veth smoke gate on Linux 6.8 (lab) demonstrating end-to-end reproduction.
 
@@ -39,7 +39,7 @@ Hardware SmartNIC signed offload is **out of scope** for this harness.
 
 ## Corpus (eleven packets)
 
-Each frame embeds a test ID (`0xA001`–`0xA00C`) in the TCP/UDP sport, ICMP id, or payload tail so `compare.py` can pair captures without timing alignment.
+Each frame embeds a test ID in the TCP/UDP sport, ICMP id, or payload tail so `compare.py` can pair captures without timing alignment.
 
 | Test ID | Packet | Exercises | `prog_pass_drop` expected |
 | --- | --- | --- | --- |
@@ -47,7 +47,7 @@ Each frame embeds a test ID (`0xA001`–`0xA00C`) in the TCP/UDP sport, ICMP id,
 | 0xA002 | IPv6 TCP SYN | Non-IPv4 ethertype (program passes non-IPv4) | PASS |
 | 0xA003 | 802.1Q VLAN | Single tag | PASS |
 | 0xA004 | QinQ | Double VLAN | PASS |
-| 0xA005 | IPv4 fragment | Fragment / incomplete L4 | DROP (sport match on frag path) |
+| 0xA005 | IPv4 fragment | Fragment / incomplete L4 | DROP (IPv4 frag frame lacks parseable TCP header; `sport == 0xA005` path not reached — parse fails → DROP) |
 | 0xA009 | ICMP echo | Non-TCP/UDP | PASS |
 | 0xA008 | UDP zero checksum | UDP / checksum edge | PASS |
 | 0xA007 | TCP FIN/ACK | TCP flags | PASS |
@@ -66,6 +66,8 @@ The current `compare.py` implements **capture-level equivalence**:
 3. **Verdict:** for each test ID, `equivalent: true` when native and generic fingerprints match; otherwise count as one divergence.
 
 This encodes disposition and visible byte changes together — if one backend drops and the other passes, captures differ and the case flags non-equivalent. The manifest schema reserves `disposition`, `class`, and per-field metadata for a v2 comparator; v1 does not populate them yet.
+
+**Non-deterministic fields:** `prog_pass_drop` does not modify headers. Packets traverse ingress RX only (no routing), checksum offload is disabled on bare-metal runs, and veth injection does not rewrite TTL or IP ID. For future programs that modify headers (`prog_l3_modify`), comparator v2 will support mask files to exclude timestamps, IDs, and checksum fields. Until then, pass/drop-only programs treat full-frame SHA-256 as a valid equivalence proxy on this topology.
 
 **Measurement controls (bare-metal profile):** disable RX/TX checksum and RX VLAN offload before sweep:
 
@@ -122,17 +124,36 @@ compare.py → manifests/run_manifest_virtio_vm_pass_drop.json
 - **i40e** (X710 class): different driver architecture; VLAN/metadata edge cases.
 - **igb/igc** (I350 class): accessible hardware; exercises generic fallback on ports without full native XDP.
 
-## Validation (virtio smoke gate)
+## Validation
 
-On Linux **6.8.0-134-generic** (lab VM, virtio/veth profile), `prog_pass_drop`:
+### Smoke gate (`prog_pass_drop`)
+
+On Linux **6.8.0-134-generic** (lab VM, virtio/veth profile):
 
 | Metric | Result |
 | --- | --- |
 | Corpus cases paired | 11 / 11 |
 | Capture fingerprint mismatches (native vs generic) | **0** |
-| Smoke script | PASS |
+| `scripts/smoke.sh` | PASS |
 
-Example manifest excerpt:
+Zero mismatches here means native and generic **agreed on captured frames** for this trivial pass/drop program on veth — not that backends always agree everywhere.
+
+### Comparator sensitivity (synthetic)
+
+`scripts/comparator-selftest.py` feeds `compare.py` two pcaps with the same test ID (`0xA099`) and intentionally different post-hook bytes (TTL change). Result: **`divergence_count: 1`**. This proves the comparator flags differences when they exist — it is not a tautology locked to zero.
+
+Run the full validation bundle:
+
+```bash
+bash scripts/comparator-sensitivity.sh   # self-test + optional live probes
+# or: make validate-comparator
+```
+
+### Live backend probes (informational)
+
+The repository also ships `prog_metadata_test` (checks `data_meta` headroom) and `prog_vlan_probe` (PASS when 802.1Q is visible at L2). On our **6.8 veth lab run**, both probes still reported **0 capture divergences** — native and generic presented identical frames to `xdpdump`. We keep these programs for bare-metal and driver-specific profiles where backend differences are more likely. The self-test above is the publish gate for comparator teeth.
+
+Example manifest excerpt (`prog_pass_drop`, smoke gate):
 
 ```json
 {
@@ -152,7 +173,7 @@ Example manifest excerpt:
 }
 ```
 
-(`test_id` 40961 = 0xA001.) This validates that the harness builds, injects, captures, and compares end-to-end. It is **not** a general proof that native and generic XDP agree for all programs, drivers, or offload states. It is the reproducibility baseline cited by tag **`blog-x01-2026-07`**.
+(`test_id` 40961 = 0xA001.) This validates end-to-end harness operation. Pinned manifests for bare-metal profiles ship in a follow-up post.
 
 ## Run it yourself
 
@@ -165,9 +186,13 @@ git checkout blog-x01-2026-07
 
 sudo apt-get install -y clang llvm libbpf-dev python3-scapy xdp-tools make \
   linux-tools-common linux-headers-$(uname -r)
+# bpftool: from linux-tools-common on Ubuntu/Debian (package name may be bpftool on others)
 
 bash scripts/smoke.sh
+bash scripts/comparator-sensitivity.sh
 ```
+
+**Troubleshooting:** `smoke.sh` exits non-zero if `xdpdump` or `clang` is missing, topology cannot create veth/netns (often stale `veth-a` — rerun `sudo make topology`), fewer than 11 paired test IDs in the manifest, or sweep/comparator failure. Run with `sudo` where shown; kernel **6.8+** matches the tagged lab gate.
 
 Outputs: `manifests/run_manifest_virtio_vm_pass_drop.json`.
 
