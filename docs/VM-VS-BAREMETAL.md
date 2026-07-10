@@ -33,6 +33,10 @@
 
 One Intel + one Mellanox covers most operator fleet splits. A single $50 Intel NIC is enough for v1 blog tag.
 
+## WiFi (phase 1 — out of scope)
+
+**802.11 / `wlan0` is not a phase-1 observation point.** WiFi drivers generally lack native XDP; generic SKB XDP on wireless is inconsistent and not comparable to wired uplink semantics. Phase 1 bare-metal profiles require a **wired** NIC (`tg3`, `igc`, `i40e`, `mlx5`, etc.).
+
 ## VM setup
 
 See [`vm/README.md`](../vm/README.md). Pin kernel in Vagrant box; enable nested virt if testing native XDP in QEMU.

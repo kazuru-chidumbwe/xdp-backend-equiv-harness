@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // prog_pass_drop: disposition-only baseline + negative control.
 #include <linux/bpf.h>
-#include <bpf/bpf_helpers.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
+#include <linux/in.h>
+#include <bpf/bpf_endian.h>
+#include <bpf/bpf_helpers.h>
 
 #define TEST_MAGIC 0x58545045u /* XTPE */
 

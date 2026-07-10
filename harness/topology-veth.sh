@@ -9,10 +9,11 @@ ADDR_A="10.200.0.1/24"
 ADDR_B="10.200.0.2/24"
 
 cleanup() {
+  ip link set dev "$VETH_B" xdp off 2>/dev/null || true
   ip link del "$VETH_A" 2>/dev/null || true
+  ip link del "$VETH_B" 2>/dev/null || true
   ip netns del "$NS_INJ" 2>/dev/null || true
 }
-trap cleanup EXIT
 
 cleanup
 ip link add "$VETH_A" type veth peer name "$VETH_B"
