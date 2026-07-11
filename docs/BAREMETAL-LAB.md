@@ -62,4 +62,4 @@ Never merge bare-metal and virtio manifests without labeling `profile`.
 
 ## WiFi
 
-Not supported in phase 1 — see [`VM-VS-BAREMETAL.md`](VM-VS-BAREMETAL.md).
+802.11 / `wlan0` is not supported — use a wired NIC pair (see [`BAREMETAL-LAB.md`](BAREMETAL-LAB.md)).

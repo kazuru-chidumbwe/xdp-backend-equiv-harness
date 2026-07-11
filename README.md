@@ -1,19 +1,19 @@
 # XDP Backend Equivalence Harness
 
-Differential test harness for **native XDP**, **generic (SKB) XDP**, and (phase 2) **AF_XDP** redirect paths. Identical deterministic packet corpus, same BPF object, compare disposition + post-hook bytes + metadata across backends.
+Differential test harness for **native XDP** and **generic (SKB) XDP**. Identical deterministic packet corpus, same BPF object, compare post-hook frame fingerprints across backends.
 
 **Lab only** — no production traffic. Synthetic corpus via Scapy.
 
 ## Research question
 
-> Does a fixed XDP program produce identical observable packet-processing outcomes across native XDP, generic XDP, and AF_XDP under identical input traffic?
+> Does a fixed XDP program produce identical observable post-hook frame bytes across native XDP and generic XDP under identical input traffic?
 
-## Reproduction strategy: VM + real NIC
+## Profiles
 
 | Profile | Purpose |
 | --- | --- |
-| **virtio VM** | Portable artifact — anyone with a laptop reproduces manifest structure |
-| **Bare-metal NIC** | Primary findings — mlx5, i40e, igc, etc. |
+| **virtio_vm** | Portable artifact — reproducible on any Linux VM / veth lab |
+| **baremetal_nic** | Physical wired NIC pair — see [`docs/BAREMETAL-LAB.md`](docs/BAREMETAL-LAB.md) |
 
 See [`docs/VM-VS-BAREMETAL.md`](docs/VM-VS-BAREMETAL.md).
 
@@ -55,7 +55,7 @@ manifests/        run output (gitignored except examples)
 
 ## Blog reproduction anchor (X01)
 
-Dev.to essay: *Same XDP Program, Three Backends…* — pin tag **`blog-x01-2026-07`**.
+Dev.to essay: *A Differential Test Harness for Native vs. Generic XDP* — pin tag **`blog-x01-2026-07`**.
 
 ```bash
 git clone https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness.git

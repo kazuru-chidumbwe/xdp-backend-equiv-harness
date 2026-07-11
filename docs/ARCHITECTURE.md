@@ -14,19 +14,17 @@ xdpdump + action log  →  captures/output_<backend>_<prog>.pcap
 compare.py  →  manifests/run_manifest.json
 ```
 
-## Backend matrix (phase 1)
+## Backend matrix
 
 | ID | Load | Capture |
 | --- | --- | --- |
-| `native` | `ip link set dev $IF xdp obj $OBJ sec $SEC` | xdpdump |
-| `generic` | `ip link set dev $IF xdpgeneric obj $OBJ sec $SEC` | xdpdump |
-
-Phase 2: `native` + `XDP_REDIRECT` to AF_XDP socket + userspace echo (checksum-agnostic ops only).
+| `native` | `ip link set dev $IF xdp obj $OBJ sec $SEC` | xdpdump `--rx-capture=exit` |
+| `generic` | `ip link set dev $IF xdpgeneric obj $OBJ sec $SEC` | xdpdump `--rx-capture=exit` |
 
 ## Equivalence classes
 
 - **Class A** — Spec-defined backend difference (document, do not count as failure)
-- **Class B** — Operator-surprising divergence (primary findings)
+- **Class B** — Operator-surprising divergence (document and investigate)
 - **Class C** — Harness bug (offload, wrong capture point, stale maps)
 
 ## Pitfalls (mandatory checklist)

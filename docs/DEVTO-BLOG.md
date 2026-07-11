@@ -4,7 +4,7 @@ description: Native and generic SKB-mode XDP are not semantic equivalents. This 
 tags: linux, networking, ebpf, security
 ---
 
-Native XDP and generic SKB-mode XDP are not semantic equivalents. The same BPF bytecode, accepted by the same verifier, can produce different packet dispositions, post-hook frame bytes, and metadata observations depending on which attach mode the kernel uses. This post is a **methodology publication**: we ship an open differential test harness, a deterministic eleven-packet corpus, and a divergence taxonomy. A tagged release lets anyone reproduce the virtio/veth smoke gate. A follow-up post will publish pinned manifests from bare-metal NIC profiles and additional programs.
+Native XDP and generic SKB-mode XDP are not semantic equivalents. The same BPF bytecode, accepted by the same verifier, can produce different packet dispositions, post-hook frame bytes, and metadata observations depending on which attach mode the kernel uses. This post is a **methodology publication**: we ship an open differential test harness, a deterministic eleven-packet corpus, and a divergence taxonomy. A tagged release lets anyone reproduce the virtio/veth smoke gate on Linux 6.8.
 
 **Problem.** A firewall or rate-limiter validated only under native XDP can silently fall back to generic mode on an unsupported driver, a veth port, or after reload — same bytecode, different behaviour, often no error line.
 
@@ -15,7 +15,7 @@ Native XDP and generic SKB-mode XDP are not semantic equivalents. The same BPF b
 3. Operational divergence taxonomy (Class A/B/C) for interpreting differences.
 4. Virtio/veth smoke gate on Linux 6.8 (lab) demonstrating end-to-end reproduction.
 
-**Scope.** This post publishes the harness methodology and **virtio/veth results for five BPF programs** (today's lab run). Bare-metal NIC sweeps require a loop-cabled dual-port pair — not yet completed in our lab (passthrough ports show `NO-CARRIER`). AF_XDP as a third observation point is future work.
+**Scope.** This release compares **native vs generic XDP** on the **virtio_vm** profile (five BPF programs, pinned manifests). The **baremetal_nic** profile uses the same sweep scripts on a loop-cabled wired pair — see [`docs/BAREMETAL-LAB.md`](BAREMETAL-LAB.md).
 
 Conformance testing stops at verifier load time. **Differential testing** asks: given identical input packets, do backends produce the same observable outcome at the hook?
 
@@ -71,9 +71,9 @@ The current `compare.py` implements **capture-level equivalence** (v1):
 1. **Disposition-only differences** — On a byte-preserving program, DROP and PASS produce identical exit-capture frame bytes. xdpdump records the verdict as separate **pcapng metadata** (e.g. `@exit[DROP]:`), not in the frame. v1 hashes frames only.
 2. **Context-metadata differences** — `ingress_ifindex`, `data_meta`, and `rx_queue_index` live in `xdp_md`; they are not part of the captured frame at all.
 
-A backend pair can disagree on either axis while v1 reports `equivalent: true`. v2 will parse pcapng action extensions and read context fields (bpftool / trace) to close both gaps.
+A backend pair can disagree on either axis while v1 reports `equivalent: true`. The manifest schema reserves `disposition` and `class` fields; v1 does not populate them.
 
-**Non-deterministic fields:** `prog_pass_drop` does not modify headers. Packets traverse ingress RX only (no routing), checksum offload is disabled on bare-metal runs, and veth injection does not rewrite TTL or IP ID. For header-mutating programs (`prog_l3_modify`, `prog_vlan`), exit capture reflects modifications; comparator v2 will add mask files for checksum/IP-ID fields where needed.
+**Non-deterministic fields:** `prog_pass_drop` does not modify headers. Packets traverse ingress RX only (no routing), checksum offload is disabled on bare-metal runs, and veth injection does not rewrite TTL or IP ID. For header-mutating programs (`prog_l3_modify`, `prog_vlan`), exit capture reflects modifications.
 
 **Measurement controls (bare-metal profile):** disable RX/TX checksum and RX VLAN offload before sweep:
 
@@ -111,7 +111,7 @@ xdpdump → captures/output_<backend>_pass_drop.pcap
 compare.py → manifests/run_manifest_virtio_vm_pass_drop.json
 ```
 
-**Bare-metal profile (blueprint).** Second physical port (or netns-moved inject port) + loop cable; same sweep script with `PROFILE=baremetal_nic`. Entry point: `make baremetal-sweep` (topology, carrier check, offload disable, sweep). Not yet run to completion in our lab (no loop-cabled pair).
+**Bare-metal profile.** Second physical port (or netns-moved inject port) + loop cable; same sweep script with `PROFILE=baremetal_nic`. Entry point: `make baremetal-sweep` (topology, carrier check, offload disable, sweep). See [`docs/BAREMETAL-LAB.md`](BAREMETAL-LAB.md).
 
 ## Experimental profiles
 
@@ -123,12 +123,6 @@ compare.py → manifests/run_manifest_virtio_vm_pass_drop.json
 `scripts/smoke.sh` wraps corpus + build + topology + sweep + a minimum case-count check — use it as the **pass/fail gate**. `make sweep-virtio` runs one program; `bash scripts/sweep-all-virtio.sh` sweeps all five blog programs on veth.
 
 **Why a loop cable on bare metal?** XDP is an ingress hook. Injecting on the same NIC you attach to hits the TX path; a peer port (physical or veth) puts traffic on RX where native vs generic semantics differ.
-
-**NIC families we plan to profile (lab roadmap):**
-
-- **mlx5** (ConnectX): mature native XDP; common in high-throughput lab setups.
-- **i40e** (X710 class): different driver architecture; VLAN/metadata edge cases.
-- **igb/igc** (I350 class): accessible hardware; exercises generic fallback on ports without full native XDP.
 
 ## Results
 
@@ -146,9 +140,7 @@ Pinned manifests: `manifests/run_manifest_virtio_vm_<program>.json` in the repos
 
 **What this means.** Zero divergences on veth means native and generic **presented identical exit-capture frame bytes** for these programs on this topology — not that backends always agree on every NIC.
 
-**Why `prog_metadata_test` shows 0 on veth (not a bug).** The program returns `XDP_PASS` when `data_meta < data` (headroom exists), else `XDP_DROP`. On our **6.8 veth** run, both backends likely agreed on headroom **and** exit-capture bytes. Even when backends disagree on disposition or `data_meta`, v1 may still show 0 — disposition lives in pcapng metadata; `data_meta` is never in the frame (see blind spots above). Bare-metal sweeps are where Class A context gaps are expected; the paper hook is v2 + physical NIC profiles.
-
-**Bare-metal (pending).** PCI passthrough ports (`ens16f0` / `ens16f1`, BCM5720 class) in our VM show `NO-CARRIER` without a loop cable — we have not published bare-metal manifests yet. When loop-cabled, run `sudo NIC=… INJ_IFACE=… PROG=metadata_test make baremetal-sweep` (or `scripts/sweep-all-virtio.sh` on veth) — that is the path to Class A/B findings (e.g. VLAN tag visibility under RX offload).
+**Why `prog_metadata_test` shows 0 on veth (not a bug).** The program returns `XDP_PASS` when `data_meta < data` (headroom exists), else `XDP_DROP`. On our **6.8 veth** run, both backends likely agreed on headroom **and** exit-capture bytes. Even when backends disagree on disposition or `data_meta`, v1 may still show 0 — disposition lives in pcapng metadata; `data_meta` is never in the frame (see blind spots above).
 
 ## Validation
 
@@ -178,7 +170,7 @@ bash scripts/sweep-all-virtio.sh         # all five programs on veth
 
 ### Live backend probes (informational)
 
-The repository ships `prog_metadata_test`, `prog_vlan`, `prog_l3_modify`, and `prog_redirect` alongside `prog_vlan_probe` (802.1Q visibility probe). On our **6.8 veth lab run**, all five sweeps above reported **0 capture divergences**. We keep these programs for bare-metal and driver-specific profiles where backend differences are more likely. The self-test above is the publish gate for comparator teeth.
+The repository ships `prog_metadata_test`, `prog_vlan`, `prog_l3_modify`, and `prog_redirect` alongside `prog_vlan_probe` (802.1Q visibility probe). On our **6.8 veth lab run**, all five sweeps above reported **0 capture divergences**. The self-test above is the publish gate for comparator teeth.
 
 Example manifest excerpt (`prog_pass_drop`, smoke gate):
 
@@ -200,7 +192,7 @@ Example manifest excerpt (`prog_pass_drop`, smoke gate):
 }
 ```
 
-(`test_id` 40961 = 0xA001.) Full manifests for all five virtio programs are in the repository. Bare-metal profiles ship when loop-cabled hardware is available.
+(`test_id` 40961 = 0xA001.) Full manifests for all five virtio programs are in the repository.
 
 ## Run it yourself
 
@@ -224,15 +216,7 @@ bash scripts/sweep-all-virtio.sh
 
 Outputs: `manifests/run_manifest_virtio_vm_*.json`.
 
-Bare-metal (when loop-cabled): see [`docs/BAREMETAL-LAB.md`](https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness/blob/main/docs/BAREMETAL-LAB.md).
-
-## Future work
-
-- Bare-metal NIC manifests (loop-cabled `mlx5` / `i40e` / `igc` / BCM5720 profiles) — Class B divergence hunting.
-- Comparator v2 fields (disposition, metadata class, field masks for `prog_l3_modify`).
-- DEVMAP-based redirect to a peer interface (current `prog_redirect` uses same-port reinject).
-- AF_XDP redirect path as a third observation point.
-- Related-work comparison with kernel BPF selftests and `xdp-tools` (this harness targets cross-backend **equivalence**, not single-backend correctness).
+Bare-metal (loop-cabled wired pair): see [`docs/BAREMETAL-LAB.md`](https://github.com/kazuru-chidumbwe/xdp-backend-equiv-harness/blob/main/docs/BAREMETAL-LAB.md).
 
 ---
 

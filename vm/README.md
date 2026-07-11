@@ -1,6 +1,6 @@
 # Vagrant lab (virtio native + generic XDP)
 
-Pinned kernel box for artifact evaluation. Primary paper claims should also come from bare-metal NIC manifests.
+Pinned kernel box for virtio_vm profile reproduction.
 
 ## Requirements
 
