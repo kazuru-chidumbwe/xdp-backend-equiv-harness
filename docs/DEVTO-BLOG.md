@@ -66,7 +66,12 @@ The current `compare.py` implements **capture-level equivalence** (v1):
 3. **Fingerprint:** SHA-256 of the captured frame bytes (truncated to 16 hex chars in the manifest).
 4. **Verdict:** for each test ID, `equivalent: true` only when **both** backends captured the ID **and** fingerprints match. A test ID present in one backend but missing in the other counts as a divergence.
 
-**What v1 does not yet measure:** XDP disposition (`PASS`/`DROP`/`REDIRECT`) when both backends capture the same bytes at exit — e.g. identical post-hook frames with different verdict metadata. Comparator v2 will read `pcapng` ebpf verdict fields and populate manifest `disposition` / `class`. Until then, programs that only change verdicts without changing bytes may show **0 fingerprint divergences** even when backends disagree (see `prog_metadata_test` below).
+**What v1 does not measure (two separate blind spots):**
+
+1. **Disposition-only differences** — On a byte-preserving program, DROP and PASS produce identical exit-capture frame bytes. xdpdump records the verdict as separate **pcapng metadata** (e.g. `@exit[DROP]:`), not in the frame. v1 hashes frames only.
+2. **Context-metadata differences** — `ingress_ifindex`, `data_meta`, and `rx_queue_index` live in `xdp_md`; they are not part of the captured frame at all.
+
+A backend pair can disagree on either axis while v1 reports `equivalent: true`. v2 will parse pcapng action extensions and read context fields (bpftool / trace) to close both gaps.
 
 **Non-deterministic fields:** `prog_pass_drop` does not modify headers. Packets traverse ingress RX only (no routing), checksum offload is disabled on bare-metal runs, and veth injection does not rewrite TTL or IP ID. For header-mutating programs (`prog_l3_modify`, `prog_vlan`), exit capture reflects modifications; comparator v2 will add mask files for checksum/IP-ID fields where needed.
 
@@ -141,7 +146,7 @@ Pinned manifests: `manifests/run_manifest_virtio_vm_<program>.json` in the repos
 
 **What this means.** Zero divergences on veth means native and generic **presented identical exit-capture frame bytes** for these programs on this topology — not that backends always agree on every NIC.
 
-**Why `prog_metadata_test` shows 0 on veth (not a bug).** The program returns `XDP_PASS` when `data_meta < data` (headroom exists), else `XDP_DROP`. It does not check for NULL — `data_meta` is always a kernel boundary pointer. On our **6.8 veth** run, both native and generic exposed the **same** headroom relationship, so both backends took the same disposition path and produced matching exit captures. That is a profile-specific negative result, not proof that `data_meta` never diverges. Generic SKB XDP on physical NICs is where Class A `data_meta` gaps are expected; bare-metal sweeps are the paper hook. If backends disagree on verdict but not bytes, v1 fingerprinting alone will still show 0 — another reason we label this a methodology/baseline post, not a discovery paper yet.
+**Why `prog_metadata_test` shows 0 on veth (not a bug).** The program returns `XDP_PASS` when `data_meta < data` (headroom exists), else `XDP_DROP`. On our **6.8 veth** run, both backends likely agreed on headroom **and** exit-capture bytes. Even when backends disagree on disposition or `data_meta`, v1 may still show 0 — disposition lives in pcapng metadata; `data_meta` is never in the frame (see blind spots above). Bare-metal sweeps are where Class A context gaps are expected; the paper hook is v2 + physical NIC profiles.
 
 **Bare-metal (pending).** PCI passthrough ports (`ens16f0` / `ens16f1`, BCM5720 class) in our VM show `NO-CARRIER` without a loop cable — we have not published bare-metal manifests yet. When loop-cabled, run `sudo NIC=… INJ_IFACE=… PROG=metadata_test make baremetal-sweep` (or `scripts/sweep-all-virtio.sh` on veth) — that is the path to Class A/B findings (e.g. VLAN tag visibility under RX offload).
 
