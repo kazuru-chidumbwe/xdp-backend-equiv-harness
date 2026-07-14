@@ -19,7 +19,7 @@ What this release includes:
 3. An operational divergence taxonomy (Class A / B / C).
 4. A virtio/veth smoke gate on Linux 6.8 that shows the full path is reproducible end to end.
 
-Scope for this post: native vs generic XDP on the `virtio_vm` profile only (five BPF programs, pinned manifests). Physical NIC results are a follow-up post; they are not part of this baseline.
+Scope for this post: native vs generic XDP on the `virtio_vm` profile only (five BPF programs, pinned manifests). This is part 1 of 2 — it establishes the harness and an instrument-validity baseline; a follow-up post covers bare-metal divergence results. Physical NIC results are not part of this baseline.
 
 Ordinary conformance checks stop at “did the program load?” Differential testing asks a sharper question: given identical input packets, do the backends produce the same observable outcome at the hook?
 
