@@ -51,7 +51,7 @@ Each frame carries a test ID in the TCP/UDP source port, ICMP id, or payload tai
 | 0xA002 | IPv6 TCP SYN | Non-IPv4 ethertype (program passes non-IPv4) | PASS |
 | 0xA003 | 802.1Q VLAN | Single tag | PASS |
 | 0xA004 | QinQ | Double VLAN | PASS |
-| 0xA005 | IPv4 fragment | Fragment / incomplete L4 | DROP (no parseable TCP header; the `sport == 0xA005` path is never reached) |
+| 0xA005 | IPv4 fragment | Fragment / incomplete L4 | PASS (a non-first fragment carries no TCP header, so the `sport == 0xA005` drop branch is never reached — the drop path is effectively dead against this corpus) |
 | 0xA009 | ICMP echo | Non-TCP/UDP | PASS |
 | 0xA008 | UDP zero checksum | UDP / checksum edge | PASS |
 | 0xA007 | TCP FIN/ACK | TCP flags | PASS |
@@ -72,7 +72,7 @@ Coverage spans L2 (VLAN/QinQ), L3 (IPv4/IPv6/frag/TOS), L4 (TCP/UDP/ICMP), a che
 
 What v1 does not measure (two blind spots):
 
-1. Disposition-only differences — on a byte-preserving program, DROP and PASS can leave identical exit-capture frame bytes. `xdpdump` records the verdict in pcapng metadata (for example `@exit[DROP]:`), not in the frame. v1 hashes frames only.
+1. Disposition-only differences — on a byte-preserving program, DROP and PASS can leave identical exit-capture frame bytes. `xdpdump` reports the verdict in its text output (for example `xdp_prog()@exit[DROP]`), not inside the captured frame and not in the `-w` pcapng file. v1 hashes frames only, so it never sees the verdict.
 2. Context-metadata differences — `ingress_ifindex`, `data_meta`, and `rx_queue_index` live in `xdp_md` and never appear in the captured frame.
 
 So two backends can disagree on either axis while v1 still reports `equivalent: true`. Both gaps are Class C observation limits (see the taxonomy below). The manifest schema reserves `disposition` and `class` fields; v1 does not populate them.
@@ -131,7 +131,7 @@ We ran the harness on the `virtio_vm` profile (Linux 6.8.0-134-generic, veth + n
 
 Pinned manifests live in the repository as `manifests/run_manifest_virtio_vm_<program>.json`.
 
-Zero divergences on veth means native and generic presented identical exit-capture frame bytes for these programs on this topology. It does not mean backends always agree on every NIC. Just as important: it does not cover the XDP action. Because `prog_pass_drop` and `prog_metadata_test` never modify the frame, v1 cannot detect a verdict (DROP vs PASS) or metadata disagreement — zero here means only that exit-capture bytes matched, which is necessary but not sufficient for behavioural equivalence. This byte-only baseline would still report zero even if one backend dropped a packet the other passed. Verdict comparison — parsing `xdpdump`'s pcapng `@exit[DROP]`/`@exit[PASS]` annotation into a `verdict_match` field — is the explicit next priority (v1.1).
+Zero divergences on veth means native and generic presented identical exit-capture frame bytes for these programs on this topology. It does not mean backends always agree on every NIC. Just as important: it does not cover the XDP action. Because `prog_pass_drop` and `prog_metadata_test` never modify the frame, v1 cannot detect a verdict (DROP vs PASS) or metadata disagreement — zero here means only that exit-capture bytes matched, which is necessary but not sufficient for behavioural equivalence. This byte-only baseline would still report zero even if one backend dropped a packet the other passed. Verdict comparison — capturing `xdpdump`'s text output (`@exit[PASS]`/`@exit[DROP]`, obtained with `xdpdump -x`) and recording a `verdict_match` field per test ID — is the explicit next priority (v1.1).
 
 A note on `prog_metadata_test` showing 0 on veth: the program returns `XDP_PASS` when `data_meta < data`, otherwise `XDP_DROP`. The only thing this run measures is that the exit-capture frame bytes matched; the program never mutates the payload, so identical bytes are expected regardless of the verdict. This is **not** evidence that the two backends agreed on `data_meta` headroom — `data_meta` lives in `xdp_md` and is never captured in the frame. Treat headroom agreement as unmeasured, not confirmed.
 
