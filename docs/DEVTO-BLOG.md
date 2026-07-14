@@ -131,9 +131,14 @@ We ran the harness on the `virtio_vm` profile (Linux 6.8.0-134-generic, veth + n
 
 Pinned manifests live in the repository as `manifests/run_manifest_virtio_vm_<program>.json`.
 
-Zero divergences on veth means native and generic presented identical exit-capture frame bytes for these programs on this topology. It does not mean backends always agree on every NIC.
+Zero divergences on veth means native and generic presented identical exit-capture frame bytes for these programs on this topology. It does not mean backends always agree on every NIC. Just as important: it does not cover the XDP action. Because `prog_pass_drop` and `prog_metadata_test` never modify the frame, v1 cannot detect a verdict (DROP vs PASS) or metadata disagreement — zero here means only that exit-capture bytes matched, which is necessary but not sufficient for behavioural equivalence. This byte-only baseline would still report zero even if one backend dropped a packet the other passed. Verdict comparison — parsing `xdpdump`'s pcapng `@exit[DROP]`/`@exit[PASS]` annotation into a `verdict_match` field — is the explicit next priority (v1.1), and it is a prerequisite before any bare-metal run.
 
-A note on `prog_metadata_test` showing 0 on veth: the program returns `XDP_PASS` when `data_meta < data` (headroom exists), otherwise `XDP_DROP`. On our 6.8 veth run, both backends appear to have agreed on headroom and on exit-capture bytes. Even when backends disagree on disposition or `data_meta`, v1 can still report 0 — disposition lives in pcapng metadata, and `data_meta` is never in the frame (see the blind spots above).
+A note on `prog_metadata_test` showing 0 on veth: the program returns `XDP_PASS` when `data_meta < data`, otherwise `XDP_DROP`. The only thing this run measures is that the exit-capture frame bytes matched; the program never mutates the payload, so identical bytes are expected regardless of the verdict. This is **not** evidence that the two backends agreed on `data_meta` headroom — `data_meta` lives in `xdp_md` and is never captured in the frame. Treat headroom agreement as unmeasured, not confirmed.
+
+Two further observation limits to name explicitly for this baseline:
+
+- `prog_redirect`: the harness captures exit frames on the attach interface, but `XDP_REDIRECT` forwards the packet to a target interface. Equivalence is not established without confirming the packet reached the redirect destination with matching bytes — a Class C limit for this program in v1.
+- VLAN offload: the corpus includes 802.1Q and QinQ, but the harness does not yet verify whether RX VLAN offload strips tags before XDP sees them (more likely under generic mode). `prog_vlan_probe` ships for this check, but its output is not part of this baseline.
 
 ## Validation
 
@@ -147,7 +152,7 @@ On Linux 6.8.0-134-generic (lab VM, virtio/veth profile):
 | Capture fingerprint mismatches (native vs generic) | 0 |
 | `scripts/smoke.sh` | PASS |
 
-Zero mismatches here means native and generic agreed on captured frames for this trivial pass/drop program on veth — not that backends always agree everywhere.
+Zero mismatches here means native and generic agreed on captured frames for this trivial pass/drop program on veth — not that backends always agree everywhere. For a non-mutating program like `prog_pass_drop`, this byte check is blind to the verdict: it would still pass even if one backend dropped a packet the other passed, as long as the frame bytes are unchanged. Read the smoke gate as a byte-level backstop, not a semantic-equivalence check; requiring verdict agreement for `prog_pass_drop` is the planned v1.1 upgrade.
 
 ### Comparator sensitivity (synthetic)
 
@@ -163,7 +168,7 @@ bash scripts/sweep-all-virtio.sh         # all five programs on veth
 
 ### Live backend probes (informational)
 
-The repository ships `prog_metadata_test`, `prog_vlan`, `prog_l3_modify`, and `prog_redirect`, plus `prog_vlan_probe` (an 802.1Q visibility probe). On our 6.8 veth lab run, all five sweeps above reported 0 capture divergences. The synthetic self-test is the publish gate that the comparator has teeth.
+The repository ships `prog_metadata_test`, `prog_vlan`, `prog_l3_modify`, and `prog_redirect`, plus `prog_vlan_probe` (an 802.1Q visibility probe). On our 6.8 veth lab run, all five sweeps above reported 0 **capture-byte** divergences. The synthetic self-tests confirm the byte comparator flags differences when they exist; they do not extend coverage to the verdict or context axes, which remain unmeasured in v1.
 
 Example manifest excerpt (`prog_pass_drop`, smoke gate):
 
