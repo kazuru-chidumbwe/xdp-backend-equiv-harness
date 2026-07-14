@@ -41,11 +41,13 @@ load_backend() {
 capture_backend() {
   local mode="$1"
   local out="$CAPTURE_DIR/output_${mode}_${PROG}.pcap"
+  local vout="$CAPTURE_DIR/verdict_${mode}_${PROG}.txt"
   load_backend "$mode"
   if ! command -v xdpdump >/dev/null 2>&1; then
     echo "xdpdump not found — install xdp-tools" >&2
     exit 1
   fi
+  # Pass 1: frame bytes to pcap (byte fingerprint comparison).
   timeout 8 xdpdump -i "$IFACE" --rx-capture="$XDP_CAPTURE_MODE" -w "$out" &
   local xdppid=$!
   sleep 0.5
@@ -53,6 +55,16 @@ capture_backend() {
   sleep 1.5
   kill "$xdppid" 2>/dev/null || true
   wait "$xdppid" 2>/dev/null || true
+  # Pass 2: verdict via xdpdump text output. The XDP action (@exit[PASS]/[DROP])
+  # is only in xdpdump's stdout text (with -x for frame hex), never in the -w
+  # pcapng; -w and stdout are mutually exclusive, so this is a second injection.
+  timeout 8 xdpdump -i "$IFACE" --rx-capture=entry,exit -x >"$vout" 2>/dev/null &
+  local vpid=$!
+  sleep 0.5
+  ip netns exec "$NS_INJ" python3 harness/inject.py corpus/corpus.pcap "$INJ_IFACE"
+  sleep 1.5
+  kill "$vpid" 2>/dev/null || true
+  wait "$vpid" 2>/dev/null || true
   detach_xdp
 }
 
@@ -76,7 +88,9 @@ capture_backend generic
 MANIFEST="$MANIFEST_DIR/run_manifest_${PROFILE}_${PROG}.json"
 PROG="$PROG" python3 harness/compare.py "$MANIFEST" \
   "native:$CAPTURE_DIR/output_native_${PROG}.pcap" \
-  "generic:$CAPTURE_DIR/output_generic_${PROG}.pcap"
+  "generic:$CAPTURE_DIR/output_generic_${PROG}.pcap" \
+  --verdict "native:$CAPTURE_DIR/verdict_native_${PROG}.txt" \
+  --verdict "generic:$CAPTURE_DIR/verdict_generic_${PROG}.txt"
 
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 python3 - "$MANIFEST" "$PROFILE" "$COMMIT" "$IFACE" <<'PY'

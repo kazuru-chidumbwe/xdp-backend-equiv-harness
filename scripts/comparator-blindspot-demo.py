@@ -55,8 +55,9 @@ def main() -> int:
         raise SystemExit(f"FAIL: blind-spot demo expected 0 divergences, got {div}")
     print(f"BLINDSPOT OK — divergence_count={div} on identical frame bytes")
     print(
-        "  v1 sees frame bytes only: disposition (pcapng @exit[DROP]/@exit[PASS]) "
-        "and xdp_md context (data_meta, ingress_ifindex, rx_queue_index) are not compared."
+        "  v1 byte fingerprints see frame bytes only. Disposition (xdpdump text "
+        "@exit[DROP]/@exit[PASS]) is now compared via --verdict; xdp_md context "
+        "(data_meta, ingress_ifindex, rx_queue_index) is still not captured."
     )
     return 0
 

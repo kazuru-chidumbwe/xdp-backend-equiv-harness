@@ -11,6 +11,7 @@ echo "=== comparator self-test (synthetic pcaps) ==="
 python3 scripts/comparator-selftest.py
 python3 scripts/comparator-missing-tid-test.py
 python3 scripts/comparator-blindspot-demo.py
+python3 scripts/comparator-verdict-selftest.py
 
 if ! command -v xdpdump >/dev/null; then
   echo "SKIP live probes: xdpdump not installed"
