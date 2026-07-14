@@ -10,6 +10,7 @@ export PATH="/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 echo "=== comparator self-test (synthetic pcaps) ==="
 python3 scripts/comparator-selftest.py
 python3 scripts/comparator-missing-tid-test.py
+python3 scripts/comparator-blindspot-demo.py
 
 if ! command -v xdpdump >/dev/null; then
   echo "SKIP live probes: xdpdump not installed"
