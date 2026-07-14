@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-10T16:27:30.714156+00:00",
+  "generated_at": "2026-07-14T02:50:01.566795+00:00",
   "backends": [
     "native",
     "generic"
@@ -11,7 +11,12 @@
         "native": "773e3c03ec298808",
         "generic": "773e3c03ec298808"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40962,
@@ -19,7 +24,12 @@
         "native": "e08cf5fc05db6875",
         "generic": "e08cf5fc05db6875"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40963,
@@ -27,7 +37,12 @@
         "native": "ccd5bbf6440828b6",
         "generic": "ccd5bbf6440828b6"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40964,
@@ -35,7 +50,12 @@
         "native": "ca7805cb33defceb",
         "generic": "ca7805cb33defceb"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40965,
@@ -43,7 +63,12 @@
         "native": "7ba56ea4daaf8982",
         "generic": "7ba56ea4daaf8982"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40967,
@@ -51,7 +76,12 @@
         "native": "ebc04e6d801ac85b",
         "generic": "ebc04e6d801ac85b"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40968,
@@ -59,7 +89,12 @@
         "native": "55ea3615ce97ed2f",
         "generic": "55ea3615ce97ed2f"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40969,
@@ -67,7 +102,12 @@
         "native": "a59823d30d1da632",
         "generic": "a59823d30d1da632"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40970,
@@ -75,7 +115,12 @@
         "native": "ce82734c5e8b34b8",
         "generic": "ce82734c5e8b34b8"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40971,
@@ -83,7 +128,12 @@
         "native": "bcc97b5cc3508980",
         "generic": "bcc97b5cc3508980"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40972,
@@ -91,11 +141,17 @@
         "native": "fd29df551afd5c2d",
         "generic": "fd29df551afd5c2d"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "REDIRECT",
+        "generic": "REDIRECT"
+      },
+      "verdict_match": true
     }
   ],
   "divergence_count": 0,
-  "corpus_sha256": "9b20a6c6b000360187a09210bbb351d5302a01bbc14c21ebb1f8ee1d95cfc866",
+  "verdict_divergence_count": 0,
+  "corpus_sha256": "9f089fb662da2a8bb2927977ead7fd15fa0aecaa3b2c3d8ea69dd156d0fec6b3",
   "program_sha256": "4b6b7d4b6b977c3629c4ce5be0341e89a0d0ab70e38c1c0e6c3c499dcbf8f2d3",
   "profile": "virtio_vm",
   "kernel": "6.8.0-134-generic",

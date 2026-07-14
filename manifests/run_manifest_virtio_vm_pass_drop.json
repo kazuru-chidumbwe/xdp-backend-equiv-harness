@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-10T16:27:02.313930+00:00",
+  "generated_at": "2026-07-14T02:50:15.661597+00:00",
   "backends": [
     "native",
     "generic"
@@ -11,7 +11,12 @@
         "native": "773e3c03ec298808",
         "generic": "773e3c03ec298808"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40962,
@@ -19,7 +24,12 @@
         "native": "e08cf5fc05db6875",
         "generic": "e08cf5fc05db6875"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40963,
@@ -27,7 +37,12 @@
         "native": "ccd5bbf6440828b6",
         "generic": "ccd5bbf6440828b6"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40964,
@@ -35,7 +50,12 @@
         "native": "ca7805cb33defceb",
         "generic": "ca7805cb33defceb"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40965,
@@ -43,7 +63,12 @@
         "native": "7ba56ea4daaf8982",
         "generic": "7ba56ea4daaf8982"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40967,
@@ -51,7 +76,12 @@
         "native": "ebc04e6d801ac85b",
         "generic": "ebc04e6d801ac85b"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40968,
@@ -59,7 +89,12 @@
         "native": "55ea3615ce97ed2f",
         "generic": "55ea3615ce97ed2f"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40969,
@@ -67,7 +102,12 @@
         "native": "a59823d30d1da632",
         "generic": "a59823d30d1da632"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40970,
@@ -75,7 +115,12 @@
         "native": "ce82734c5e8b34b8",
         "generic": "ce82734c5e8b34b8"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40971,
@@ -83,7 +128,12 @@
         "native": "bcc97b5cc3508980",
         "generic": "bcc97b5cc3508980"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40972,
@@ -91,11 +141,17 @@
         "native": "fd29df551afd5c2d",
         "generic": "fd29df551afd5c2d"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     }
   ],
   "divergence_count": 0,
-  "corpus_sha256": "ceac47305db2ead2bf5917284a0ded63e4cd5087e0d6c6f6aec96b5d550c3918",
+  "verdict_divergence_count": 0,
+  "corpus_sha256": "84ad57328bfd6bd733a07219bc9a1d02ecdc2ca0d1c7af7274e5284710b771c1",
   "program_sha256": "1e91e28f7e392a194ee57d2f83f14a7dcd28ee9b25dcb6b5899346ab8233d819",
   "profile": "virtio_vm",
   "kernel": "6.8.0-134-generic",

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-10T16:27:23.648657+00:00",
+  "generated_at": "2026-07-14T02:49:48.243508+00:00",
   "backends": [
     "native",
     "generic"
@@ -8,10 +8,15 @@
     {
       "test_id": 40961,
       "fingerprints": {
-        "native": "773e3c03ec298808",
-        "generic": "773e3c03ec298808"
+        "native": "d99cb9cc18c77439",
+        "generic": "d99cb9cc18c77439"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40962,
@@ -19,7 +24,12 @@
         "native": "e08cf5fc05db6875",
         "generic": "e08cf5fc05db6875"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40963,
@@ -27,7 +37,12 @@
         "native": "ccd5bbf6440828b6",
         "generic": "ccd5bbf6440828b6"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40964,
@@ -35,67 +50,108 @@
         "native": "ca7805cb33defceb",
         "generic": "ca7805cb33defceb"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40965,
       "fingerprints": {
-        "native": "7ba56ea4daaf8982",
-        "generic": "7ba56ea4daaf8982"
+        "native": "9a0338670bafe675",
+        "generic": "9a0338670bafe675"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40967,
       "fingerprints": {
-        "native": "ebc04e6d801ac85b",
-        "generic": "ebc04e6d801ac85b"
+        "native": "de35b18b09390659",
+        "generic": "de35b18b09390659"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40968,
       "fingerprints": {
-        "native": "55ea3615ce97ed2f",
-        "generic": "55ea3615ce97ed2f"
+        "native": "ae891a2edff46869",
+        "generic": "ae891a2edff46869"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40969,
       "fingerprints": {
-        "native": "a59823d30d1da632",
-        "generic": "a59823d30d1da632"
+        "native": "b7e8d68c0008e904",
+        "generic": "b7e8d68c0008e904"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40970,
       "fingerprints": {
-        "native": "ce82734c5e8b34b8",
-        "generic": "ce82734c5e8b34b8"
+        "native": "51f6ab7382ce2845",
+        "generic": "51f6ab7382ce2845"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40971,
       "fingerprints": {
-        "native": "bcc97b5cc3508980",
-        "generic": "bcc97b5cc3508980"
+        "native": "f2eee5e197f58fb4",
+        "generic": "f2eee5e197f58fb4"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     },
     {
       "test_id": 40972,
       "fingerprints": {
-        "native": "fd29df551afd5c2d",
-        "generic": "fd29df551afd5c2d"
+        "native": "0f2888227b483805",
+        "generic": "0f2888227b483805"
       },
-      "equivalent": true
+      "equivalent": true,
+      "verdict": {
+        "native": "PASS",
+        "generic": "PASS"
+      },
+      "verdict_match": true
     }
   ],
   "divergence_count": 0,
-  "corpus_sha256": "0dd2209a7c569edb8d062591a651f47eda81366a95e60da5229839aafc21c1c7",
+  "verdict_divergence_count": 0,
+  "corpus_sha256": "8aa2db4fbc1d475437ae2b4e63d18cb1144d4cd46e011b68d8bf6030716b9a6a",
   "program_sha256": "7cb07380855e53aa850f442556497626478242bf22a869ee32cafeb5422b7a3b",
   "profile": "virtio_vm",
   "kernel": "6.8.0-134-generic",

@@ -14,10 +14,10 @@ The operational risk is straightforward. A firewall or rate-limiter validated on
 
 What this release includes:
 
-1. A harness loop: corpus → inject on the RX path → native vs generic sweep → `xdpdump` capture → `compare.py` manifest.
+1. A harness loop: corpus → inject on the RX path → native vs generic sweep → `xdpdump` capture → `compare.py` manifest, comparing both the captured frame bytes and the XDP verdict (`PASS`/`DROP`/`TX`/`REDIRECT`).
 2. A deterministic corpus with eleven embedded test IDs (`0xA001`–`0xA005`, `0xA007`–`0xA00C`; `0xA006` is intentionally omitted as a reserved gap in the generator).
 3. An operational divergence taxonomy (Class A / B / C).
-4. A virtio/veth smoke gate on Linux 6.8 that shows the full path is reproducible end to end.
+4. A virtio/veth smoke gate on Linux 6.8 — now gating on frame bytes **and** verdict agreement — that shows the full path is reproducible end to end.
 
 Scope for this post: native vs generic XDP on the `virtio_vm` profile only (five BPF programs, pinned manifests). This is part 1 of 2 — it establishes the harness and an instrument-validity baseline; a follow-up post covers bare-metal divergence results. Physical NIC results are not part of this baseline.
 
@@ -61,21 +61,18 @@ Each frame carries a test ID in the TCP/UDP source port, ICMP id, or payload tai
 
 Coverage spans L2 (VLAN/QinQ), L3 (IPv4/IPv6/frag/TOS), L4 (TCP/UDP/ICMP), a checksum edge, and an MTU fill. Companion programs isolate other behaviours: `prog_metadata_test` (`data_meta` headroom), `prog_vlan` (802.1Q rewrite), `prog_l3_modify` (TTL decrement), and `prog_redirect` (same-port `XDP_REDIRECT`).
 
-## What the comparator measures (v1)
+## What the comparator measures
 
-`compare.py` implements capture-level equivalence (v1):
+`compare.py` compares two axes per test ID:
 
 1. Pairing — extract the test ID from each `xdpdump` frame (payload tail, TCP/UDP source port, or ICMP id in `0xA000`–`0xA0FF`).
 2. Capture point — sweeps use `xdpdump --rx-capture=exit` (post-program frame bytes; default `xdpdump` is entry-only).
-3. Fingerprint — SHA-256 of the captured frame bytes (truncated to 16 hex characters in the manifest).
-4. Verdict — for each test ID, `equivalent: true` only when both backends captured the ID and the fingerprints match. An ID present on one backend but missing on the other counts as a divergence.
+3. Frame fingerprint — SHA-256 of the captured frame bytes (truncated to 16 hex characters). `equivalent: true` for a test ID only when both backends captured it and the fingerprints match; an ID present on one backend but missing on the other is a divergence.
+4. Verdict — the XDP action (`PASS` / `DROP` / `TX` / `REDIRECT`). `xdpdump` reports this in its text output (`xdp_prog()@exit[DROP]`), not in the `-w` pcapng frame, so the sweep runs a second `xdpdump -x` pass and `compare.py` records a `verdict` and `verdict_match` per test ID plus a top-level `verdict_divergence_count`. This axis is independent of the frame bytes: a byte-preserving DROP-vs-PASS disagreement is invisible to the fingerprint but caught here.
 
-What v1 does not measure (two blind spots):
+The one axis still not measured:
 
-1. Disposition-only differences — on a byte-preserving program, DROP and PASS can leave identical exit-capture frame bytes. `xdpdump` reports the verdict in its text output (for example `xdp_prog()@exit[DROP]`), not inside the captured frame and not in the `-w` pcapng file. v1 hashes frames only, so it never sees the verdict.
-2. Context-metadata differences — `ingress_ifindex`, `data_meta`, and `rx_queue_index` live in `xdp_md` and never appear in the captured frame.
-
-So two backends can disagree on either axis while v1 still reports `equivalent: true`. Both gaps are Class C observation limits (see the taxonomy below). The manifest schema reserves `disposition` and `class` fields; v1 does not populate them.
+- Context-metadata differences — `ingress_ifindex`, `data_meta`, and `rx_queue_index` live in `xdp_md` and never appear in the captured frame or in xdpdump's per-packet text. Two backends can still disagree here while both fingerprint and verdict match. This is a Class C observation limit; capturing it needs a metadata-echo BPF program, planned for the bare-metal follow-up.
 
 On non-determinism: `prog_pass_drop` does not modify headers. Packets traverse ingress RX only (no routing), and veth injection does not rewrite TTL or IP ID. For header-mutating programs (`prog_l3_modify`, `prog_vlan`), the exit capture reflects those modifications.
 
@@ -121,23 +118,25 @@ compare.py → manifests/run_manifest_virtio_vm_pass_drop.json
 
 We ran the harness on the `virtio_vm` profile (Linux 6.8.0-134-generic, veth + netns inject) across five programs:
 
-| Program | Cases paired | Divergences (native vs generic) |
-| --- | --- | --- |
-| `prog_pass_drop` | 11 / 11 | 0 |
-| `prog_metadata_test` | 11 / 11 | 0 |
-| `prog_vlan` | 11 / 11 | 0 |
-| `prog_l3_modify` | 11 / 11 | 0 |
-| `prog_redirect` | 11 / 11 | 0 |
+| Program | Cases paired | Byte divergences | Verdict (both backends) | Verdict divergences |
+| --- | --- | --- | --- | --- |
+| `prog_pass_drop` | 11 / 11 | 0 | PASS | 0 |
+| `prog_metadata_test` | 11 / 11 | 0 | DROP | 0 |
+| `prog_vlan` | 11 / 11 | 0 | PASS | 0 |
+| `prog_l3_modify` | 11 / 11 | 0 | PASS | 0 |
+| `prog_redirect` | 11 / 11 | 0 | REDIRECT | 0 |
 
 Pinned manifests live in the repository as `manifests/run_manifest_virtio_vm_<program>.json`.
 
-Zero divergences on veth means native and generic presented identical exit-capture frame bytes for these programs on this topology. It does not mean backends always agree on every NIC. Just as important: it does not cover the XDP action. Because `prog_pass_drop` and `prog_metadata_test` never modify the frame, v1 cannot detect a verdict (DROP vs PASS) or metadata disagreement — zero here means only that exit-capture bytes matched, which is necessary but not sufficient for behavioural equivalence. This byte-only baseline would still report zero even if one backend dropped a packet the other passed. Verdict comparison — capturing `xdpdump`'s text output (`@exit[PASS]`/`@exit[DROP]`, obtained with `xdpdump -x`) and recording a `verdict_match` field per test ID — is the explicit next priority (v1.1).
+Zero byte divergences on veth means native and generic presented identical exit-capture frame bytes for these programs on this topology. Zero verdict divergences means they also returned the same XDP action for every test ID. Agreement therefore holds on both axes here — but only for this topology; it does not mean backends always agree on every NIC, and the context axis (`data_meta`, `ingress_ifindex`, `rx_queue_index`) is still unmeasured.
 
-A note on `prog_metadata_test` showing 0 on veth: the program returns `XDP_PASS` when `data_meta < data`, otherwise `XDP_DROP`. The only thing this run measures is that the exit-capture frame bytes matched; the program never mutates the payload, so identical bytes are expected regardless of the verdict. This is **not** evidence that the two backends agreed on `data_meta` headroom — `data_meta` lives in `xdp_md` and is never captured in the frame. Treat headroom agreement as unmeasured, not confirmed.
+On `prog_pass_drop`: verdict capture is now instrumented, and on this corpus every test ID resolves to `PASS` on both backends. That is because the corpus does not yet include a packet that triggers the program's `DROP` branch — the drop rule fires on `TCP sport == 0xA005`, but case 05 (`0xA005`) is a non-first IP fragment with no TCP header, so the source port read at the L4 offset is never `0xA005`. The `DROP` path is effectively dead against this corpus. A packet that genuinely triggers the drop is deferred to the bare-metal follow-up, where the corpus pipeline is rebuilt and re-verified anyway.
 
-Two further observation limits to name explicitly for this baseline:
+On `prog_metadata_test`: the verdict axis now shows both backends return `DROP` for every case — something the frame fingerprint alone could never have told us (the program does not mutate the payload, so the bytes are trivially identical either way). The backends agree on the disposition. Note this is still not evidence that they agree on `data_meta` headroom itself, which lives in `xdp_md` and is never captured; treat headroom agreement as unmeasured.
 
-- `prog_redirect`: the harness captures exit frames on the attach interface, but `XDP_REDIRECT` forwards the packet to a target interface. Equivalence is not established without confirming the packet reached the redirect destination with matching bytes — a Class C limit for this program in v1.
+Two observation limits remain for this baseline:
+
+- `prog_redirect`: both backends return `REDIRECT` and the exit-capture bytes match, but the harness captures on the attach interface only. Full equivalence would also require confirming the packet reached the redirect destination with matching bytes — a Class C limit for this program.
 - VLAN offload: the corpus includes 802.1Q and QinQ, but the harness does not yet verify whether RX VLAN offload strips tags before XDP sees them (more likely under generic mode). `prog_vlan_probe` ships for this check, but its output is not part of this baseline.
 
 ## Validation
@@ -150,13 +149,14 @@ On Linux 6.8.0-134-generic (lab VM, virtio/veth profile):
 | --- | --- |
 | Corpus cases paired | 11 / 11 |
 | Capture fingerprint mismatches (native vs generic) | 0 |
+| Verdict mismatches (native vs generic) | 0 (all PASS) |
 | `scripts/smoke.sh` | PASS |
 
-Zero mismatches here means native and generic agreed on captured frames for this trivial pass/drop program on veth — not that backends always agree everywhere. For a non-mutating program like `prog_pass_drop`, this byte check is blind to the verdict: it would still pass even if one backend dropped a packet the other passed, as long as the frame bytes are unchanged. Read the smoke gate as a byte-level backstop, not a semantic-equivalence check; requiring verdict agreement for `prog_pass_drop` is the planned v1.1 upgrade.
+The gate now requires agreement on both axes: the frame fingerprints must match **and** `verdict_divergence_count` must be 0. This closes the earlier hole where a byte-only check would pass even if one backend dropped a packet the other passed — for a non-mutating program like `prog_pass_drop`, the frame bytes are identical regardless of the action, so without the verdict check the gate was blind to the single most operationally important difference. It is still a backstop on a trivial topology, not a claim of universal equivalence.
 
 ### Comparator sensitivity (synthetic)
 
-`scripts/comparator-selftest.py` feeds `compare.py` two pcaps with the same test ID (`0xA099`) and intentionally different post-hook bytes (TTL change). Result: `divergence_count: 1`. `scripts/comparator-missing-tid-test.py` checks that a test ID present on only one backend also counts as a divergence. `scripts/comparator-blindspot-demo.py` feeds identical frame bytes to both backends and correctly gets `divergence_count: 0` — byte agreement does not prove disposition or context agreement. Together these show the comparator flags byte differences when they exist, and document what v1 cannot see.
+`scripts/comparator-selftest.py` feeds `compare.py` two pcaps with the same test ID (`0xA099`) and intentionally different post-hook bytes (TTL change). Result: `divergence_count: 1`. `scripts/comparator-missing-tid-test.py` checks that a test ID present on only one backend also counts as a divergence. `scripts/comparator-blindspot-demo.py` feeds identical frame bytes to both backends and correctly gets `divergence_count: 0` — byte agreement alone does not prove context agreement. `scripts/comparator-verdict-selftest.py` synthesises two `xdpdump -x` logs for the same test ID with identical frame bytes but opposite verdicts (`PASS` vs `DROP`); the comparator reports `divergence_count: 0` (bytes match) and `verdict_divergence_count: 1` (verdict caught) — confirming the verdict axis flags a deliberate disposition mismatch that the byte fingerprint cannot see. Together these show the comparator flags both byte and verdict differences when they exist, and document the one axis (context) it still cannot see.
 
 Run the full validation bundle:
 
@@ -168,7 +168,7 @@ bash scripts/sweep-all-virtio.sh         # all five programs on veth
 
 ### Live backend probes (informational)
 
-The repository ships `prog_metadata_test`, `prog_vlan`, `prog_l3_modify`, and `prog_redirect`, plus `prog_vlan_probe` (an 802.1Q visibility probe). On our 6.8 veth lab run, all five sweeps above reported 0 **capture-byte** divergences. The synthetic self-tests confirm the byte comparator flags differences when they exist; they do not extend coverage to the verdict or context axes, which remain unmeasured in v1.
+The repository ships `prog_metadata_test`, `prog_vlan`, `prog_l3_modify`, and `prog_redirect`, plus `prog_vlan_probe` (an 802.1Q visibility probe). On our 6.8 veth lab run, all five sweeps reported 0 capture-byte divergences and 0 verdict divergences (dispositions: `pass_drop` PASS, `metadata_test` DROP, `vlan` PASS, `l3_modify` PASS, `redirect` REDIRECT — identical on both backends). The synthetic self-tests confirm the comparator flags both byte and verdict differences when they exist; the context axis (`xdp_md` metadata) remains unmeasured until the bare-metal follow-up.
 
 Example manifest excerpt (`prog_pass_drop`, smoke gate):
 
